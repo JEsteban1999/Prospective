@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install ruff
+        run: pip install ruff mypy
+      - name: Ruff check
+        run: ruff check prospective/ tests/
+      - name: Mypy
+        run: mypy prospective/
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install system deps (headless Qt)
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y libgl1 libglib2.0-0 libdbus-1-3 \
+            libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 \
+            libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
+            libxcb-xinerama0 libxcb-xfixes0
+      - name: Install Python deps
+        run: |
+          pip install --upgrade pip
+          pip install pydicom SimpleITK numpy scipy
+          pip install PyQt5 pyqtgraph
+          pip install pytest pytest-cov
+      - name: Run tests (headless)
+        env:
+          QT_QPA_PLATFORM: offscreen
+          DISPLAY: ":99"
+        run: |
+          pytest tests/ --cov=prospective --cov-report=term-missing

@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+*.whl
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Medical data — NEVER commit patient data
+*.dcm
+*.DCM
+data/
+datasets/
+dicom_data/
+patient_data/
+
+# PyInstaller
+*.spec
+dist_pyinstaller/
+
+# Logs
+*.log
+logs/
+
+# Local config
+.env
+local_settings.py
+
+# Videos
+resources/shutterstock_1090107869.mov
+resources/shutterstock_1090107869.mp4
+resources/Multimedia1.mov
+
+Documentación/

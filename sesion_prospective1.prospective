@@ -1,0 +1,52 @@
+{
+  "version": "1.0",
+  "created": "2026-04-01T09:55:39",
+  "notes": "",
+  "dicom_path": "C:/Users/juesn/Downloads/Case 3/Case 3/Unknown Study/XA",
+  "window_level": {
+    "center": -343.0,
+    "width": 4000.0,
+    "preset": "Cerebro"
+  },
+  "rendering_3d": {
+    "preset": "CTA",
+    "blend_mode": "VR (Ray Casting)",
+    "hu_min": -100,
+    "hu_max": 1500
+  },
+  "segmentation": {
+    "threshold_hu": 200,
+    "gaussian_sigma": 0.8,
+    "smooth_iter": 15,
+    "decimation": 0.7
+  },
+  "aneurysm_detection": {
+    "percentile": 88,
+    "min_r_mm": 1.0,
+    "max_r_mm": 20.0,
+    "min_pts": 8
+  },
+  "clips": [],
+  "trajectory": {
+    "entry": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "target": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "visible": false
+  },
+  "morphometrics": {},
+  "report": {
+    "patient_name": "",
+    "patient_id": "",
+    "patient_dob": "",
+    "surgeon": "",
+    "institution": "Clínica Universidad de Navarra",
+    "notes": ""
+  }
+}
