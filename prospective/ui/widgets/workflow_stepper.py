@@ -215,7 +215,7 @@ class _StepHeaderBar(QWidget):
         font_icon = QFont()
         font_icon.setFamilies(["Segoe UI Symbol", "Segoe UI", "Arial Unicode MS"])
         font_icon.setPointSize(9)
-        font_label = QFont("Segoe UI", 7)
+        font_label = QFont("Inter", 7)
         font_label.setBold(False)
         fm_label   = QFontMetrics(font_label)
 

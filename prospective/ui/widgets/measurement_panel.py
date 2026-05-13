@@ -24,7 +24,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, QEvent, pyqtSignal
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QLabel,
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
@@ -33,6 +33,15 @@ from PyQt5.QtWidgets import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _is_dark() -> bool:
+    try:
+        from prospective.ui.themes import is_dark
+        return is_dark()
+    except Exception:
+        return True
+
 
 
 # ──────────────────────────────────────────────────────────────────────────── #
@@ -135,8 +144,9 @@ class MeasurementPanel(QWidget):
         layout.setSpacing(8)
 
         # ── Guide ─────────────────────────────────────────────────────── #
+        _mc = "#9B9B9B" if _is_dark() else "#6B6B6B"
         guide = QLabel(
-            "<small style='color:#9B9B9B'>"
+            f"<small style='color:{_mc}'>"
             "Haz clic en <b>Nueva medición</b>, luego selecciona dos puntos "
             "en la escena 3D. La distancia euclídea se calcula automáticamente."
             "</small>"
@@ -149,8 +159,10 @@ class MeasurementPanel(QWidget):
         from prospective.ui.icons import I as _I
         self._btn_new = QPushButton(f"{_I.MEASURE} Nueva medición")
         self._btn_new.setCheckable(True)
+        self._btn_new.setToolTip("Inicia una medición de distancia — haz clic en dos puntos de la escena 3D")
         self._btn_new.clicked.connect(self._on_new)
         self._btn_clear = QPushButton("✕ Limpiar todo")
+        self._btn_clear.setToolTip("Elimina todas las mediciones de la sesión")
         self._btn_clear.clicked.connect(self._on_clear_all)
         self._btn_export = QPushButton("⬇ CSV")
         self._btn_export.setToolTip("Exportar mediciones a CSV")
@@ -162,6 +174,7 @@ class MeasurementPanel(QWidget):
 
         # ── Table ──────────────────────────────────────────────────────── #
         self._table = QTableWidget(0, 5)
+        self._table.installEventFilter(self)
         self._table.setHorizontalHeaderLabels(["#", "Distancia", "Etiqueta", _I.EYE, "✕"])
         self._table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self._table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
@@ -248,6 +261,32 @@ class MeasurementPanel(QWidget):
             QMessageBox.information(self, "Exportado", f"Guardado en:\n{path}")
         except OSError as exc:
             QMessageBox.critical(self, "Error al exportar", str(exc))
+
+    # ------------------------------------------------------------------ #
+    # Event filter (keyboard Delete on table)                              #
+    # ------------------------------------------------------------------ #
+
+    def eventFilter(self, obj: object, event: object) -> bool:
+        """Delete key on the measurements table removes the selected row."""
+        if obj is self._table and event.type() == QEvent.KeyPress:
+            if event.key() == Qt.Key_Delete:
+                self._delete_current_row()
+                return True
+        return super().eventFilter(obj, event)
+
+    def _delete_current_row(self) -> None:
+        """Remove the currently selected measurement row via keyboard."""
+        row = self._table.currentRow()
+        if row < 0:
+            return
+        item = self._table.item(row, self._COL_IDX)
+        if item is None:
+            return
+        idx = int(item.text())
+        self._measurements = [m for m in self._measurements if m.index != idx]
+        self._table.removeRow(row)
+        self._update_summary()
+        self.ruler_deleted.emit(idx)
 
     # ------------------------------------------------------------------ #
     # Table helpers                                                         #

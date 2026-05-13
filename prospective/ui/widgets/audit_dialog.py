@@ -125,8 +125,14 @@ class AuditDialog(QDialog):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setWindowTitle("SkullChain™ — Auditoría clínica")
-        self.setMinimumSize(920, 560)
-        self.resize(1000, 640)
+        self.setMinimumSize(760, 480)
+        from PyQt5.QtWidgets import QApplication as _QApp
+        _scr = _QApp.primaryScreen()
+        if _scr is not None:
+            _av = _scr.availableGeometry()
+            self.resize(min(1000, int(_av.width() * 0.88)), min(640, int(_av.height() * 0.85)))
+        else:
+            self.resize(1000, 640)
         self.setStyleSheet(_dialog_style())
         self._last_verify_ok: bool | None = None
         self._build_ui()
@@ -138,7 +144,7 @@ class AuditDialog(QDialog):
             from prospective.ui.glass_utils import enable_acrylic
             enable_acrylic(self)
         except Exception:
-            pass
+            logger.debug("Acrylic effect not available on this platform", exc_info=True)
 
     # ------------------------------------------------------------------ #
     # UI construction                                                      #
@@ -274,7 +280,7 @@ class AuditDialog(QDialog):
                 {"blocks_checked": block_count, "ok": all_ok, "broken_count": len(broken)},
             )
         except Exception:
-            pass
+            logger.warning("Could not append integrity-check event to audit chain", exc_info=True)
 
         self._last_verify_ok = all_ok
 

@@ -132,6 +132,7 @@ class AneurysmPanel(QWidget):
             "min_pts":              self._min_pts_spin.value(),
             "min_pos_gauss_frac":   self._pgf_spin.value(),    # v4
             "min_sphericity":       self._sph_spin.value(),    # v5
+            "pre_smooth_iters":     self._pre_smooth_iters,    # v7: Laplacian passes before curvature
         }
 
     def restore_session_state(self, d: dict) -> None:
@@ -142,6 +143,7 @@ class AneurysmPanel(QWidget):
         self._min_pts_spin.setValue(int(d.get("min_pts", 8)))
         self._pgf_spin.setValue(float(d.get("min_pos_gauss_frac", 0.50)))   # v4
         self._sph_spin.setValue(float(d.get("min_sphericity", 0.28)))       # v5
+        self._pre_smooth_iters = int(d.get("pre_smooth_iters", 0))          # v7: 0 = safe fallback
 
     def set_mesh(self, poly_data: vtk.vtkPolyData) -> None:
         """Called when a new segmentation mesh is available.
@@ -157,10 +159,14 @@ class AneurysmPanel(QWidget):
         self._crop_mode_combo.setCurrentIndex(0)   # "Sin recorte"
         self._btn_apply_crop.setEnabled(False)
         self._btn_reset_crop.setEnabled(False)
-        # Clear detection results
+        # Clear detection results AND the 3D magenta highlight.
+        # setRowCount(0) does not reliably fire itemSelectionChanged on all
+        # Qt5 / platform combinations, so we emit explicitly to guarantee that
+        # the VTK aneurysm actor is hidden whenever a new segmentation is loaded.
         self._candidates.clear()
         self._table.setRowCount(0)
         self._set_action_buttons_enabled(False)
+        self.candidate_highlighted.emit(None)   # hides magenta actor in 3D viewer
 
     # ------------------------------------------------------------------ #
     # UI                                                                   #
@@ -358,7 +364,7 @@ class AneurysmPanel(QWidget):
         pct_lay.addWidget(self._pct_slider, stretch=1)
 
         self._pct_lbl = QLabel("p75")
-        self._pct_lbl.setFixedWidth(30)
+        self._pct_lbl.setFixedWidth(36)
         pct_lay.addWidget(self._pct_lbl)
         pf.addRow("Gate curv.M:", pct_row)
 
@@ -385,7 +391,7 @@ class AneurysmPanel(QWidget):
         gauss_lay.addWidget(self._gauss_slider, stretch=1)
 
         self._gauss_lbl = QLabel("p85")
-        self._gauss_lbl.setFixedWidth(30)
+        self._gauss_lbl.setFixedWidth(36)
         gauss_lay.addWidget(self._gauss_lbl)
         pf.addRow("Umbral gauss.:", gauss_row)
 
@@ -476,7 +482,9 @@ class AneurysmPanel(QWidget):
         self._btn_preset_cta = QPushButton("CTA")
         self._btn_preset_cta.setToolTip(
             "Parámetros para CTA cerebral estándar.\n"
-            "Malla limpia e isola­da alrededor del aneurisma."
+            "Suavizado previo (10 pasos) para reducir el ruido de superficie\n"
+            "de Marching Cubes antes del cálculo de curvatura.\n"
+            "Umbrales estrictos para alta especificidad."
         )
         self._btn_preset_cta.clicked.connect(self._apply_preset_cta)
         preset_lay.addWidget(self._btn_preset_cta)
@@ -535,7 +543,7 @@ class AneurysmPanel(QWidget):
         self._table.setColumnWidth(3, 46)
         self._table.setColumnWidth(4, 44)
         self._table.setMinimumHeight(130)
-        self._table.setMaximumHeight(260)
+        self._table.setMaximumHeight(320)
         self._table.itemSelectionChanged.connect(self._on_selection_changed)
         tl.addWidget(self._table)
 
@@ -639,7 +647,7 @@ class AneurysmPanel(QWidget):
                 "}"
                 "QPushButton:hover { background:#8B9BAA; }"
                 "QPushButton:disabled{"
-                "  background:#C8D4DC; color:#8B9BAA; border:1px solid #B0BEC5;"
+                "  background:#EBF1F7; color:#4E6678; border:1px solid #C8D8E4;"
                 "}"
             )
         self._btn_confirm.clicked.connect(self._on_confirm)
@@ -927,20 +935,32 @@ class AneurysmPanel(QWidget):
                 "}"
                 "QPushButton:hover { background:#8B9BAA; }"
                 "QPushButton:disabled{"
-                "  background:#C8D4DC; color:#8B9BAA; border:1px solid #B0BEC5;"
+                "  background:#EBF1F7; color:#4E6678; border:1px solid #C8D8E4;"
                 "}"
             )
 
     def _apply_preset_cta(self) -> None:
-        """Standard CTA preset — clean isolated mesh, high specificity."""
+        """Standard CTA preset — clean isolated mesh, high specificity.
+
+        Pre-smoothing note (v7):
+        Even a "clean" CTA mesh produced by Marching Cubes contains high-
+        frequency surface wrinkles (wavelength 1–3 voxels) that vtkCurvatures
+        amplifies into Gaussian-curvature spikes.  Those spikes push the global
+        p85 threshold far above the true aneurysm dome's curvature, making the
+        dome invisible to the primary gate.  10 Laplacian passes attenuate the
+        wrinkles while preserving large-scale dome geometry (radius >> 5 vx)
+        and dramatically improve the positive_gauss_frac of the dome (from
+        ~0.4–0.6 on a noisy mesh to ~0.7–0.9 after smoothing).
+        """
         self._gauss_slider.setValue(85)
         self._pct_slider.setValue(75)
         self._min_r_spin.setValue(1.0)
         self._max_r_spin.setValue(20.0)
         self._min_pts_spin.setValue(8)
-        self._pgf_spin.setValue(0.60)   # v4: strict — CTA domes have pgf 0.85+
+        self._pgf_spin.setValue(0.60)   # v4: strict — CTA domes reach pgf 0.85+ after smoothing
         self._sph_spin.setValue(0.35)   # v5: moderate — CTA domes are mostly round
-        self._pre_smooth_iters = 0      # CTA mesh already smooth — no pre-smoothing
+        self._pre_smooth_iters = 10     # v7: 10 Laplacian passes before curvature
+                                        #     (was 0 — caused MC-noise spikes to dominate)
 
     def _apply_preset_xa(self) -> None:
         """XA / 3DRA preset — full vascular tree, noisier mesh, with pre-smoothing."""

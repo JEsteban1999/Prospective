@@ -105,9 +105,9 @@ def _plan_hdr_css() -> str:
 def _plan_vtk_hdr_css() -> str:
     if _is_dark():
         return ("background:#2A2A2A; color:#A8B8C6; font-weight:700;"
-                "font-size:12px; padding:4px; letter-spacing:1px;")
+                "font-size:13px; padding:4px; letter-spacing:1px;")
     return ("background:#E8EFF7; color:#4E6678; font-weight:700;"
-            "font-size:12px; padding:4px; letter-spacing:1px;")
+            "font-size:13px; padding:4px; letter-spacing:1px;")
 
 
 def _plan_help_css() -> str:
@@ -401,7 +401,8 @@ class PlanningWindow(QMainWindow):
             self.setMinimumSize(400, 300)   # relax the standalone 1100×720 constraint
         self.setWindowTitle("PROSPECTIVE — Planificación de Dispositivos")
         if not embedded:
-            self.setMinimumSize(1100, 720)
+            # Clamp minimum to fit 1366×768 laptops with some breathing room
+            self.setMinimumSize(880, 580)
 
         self._clip_actors:   dict[int, vtk.vtkActor] = {}
         self._stent_actors:  dict[int, vtk.vtkActor] = {}
@@ -664,7 +665,8 @@ class PlanningWindow(QMainWindow):
 
         # ── Panel stack ──────────────────────────────────────────────── #
         self._panel_stack = QStackedWidget()
-        self._panel_stack.setFixedWidth(340)
+        self._panel_stack.setMinimumWidth(240)
+        self._panel_stack.setMaximumWidth(380)
         self._panel_stack.setVisible(False)
         self._panel_stack.setStyleSheet(_plan_panel_stack_css())
 
@@ -997,12 +999,12 @@ class PlanningWindow(QMainWindow):
         rl.addWidget(self._btn_pick, 1)
 
         btn_undo = QPushButton("Deshacer")
-        btn_undo.setFixedWidth(76)
+        btn_undo.setMinimumWidth(90)
         btn_undo.clicked.connect(self._undo_last_point)
         rl.addWidget(btn_undo)
 
         self._btn_clear_traj = QPushButton("Limpiar")
-        self._btn_clear_traj.setFixedWidth(62)
+        self._btn_clear_traj.setMinimumWidth(76)
         self._btn_clear_traj.setStyleSheet(_plan_clear_traj_btn_css())
         self._btn_clear_traj.clicked.connect(self._clear_trajectory)
         rl.addWidget(self._btn_clear_traj)
@@ -1029,7 +1031,7 @@ class PlanningWindow(QMainWindow):
         self._overlap_spin.setSingleStep(0.5)
         self._overlap_spin.setDecimals(1)
         self._overlap_spin.setSuffix("mm")
-        self._overlap_spin.setFixedWidth(62)
+        self._overlap_spin.setMinimumWidth(68)
         self._overlap_spin.setToolTip("Solapamiento entre stents consecutivos (mm)")
         self._overlap_spin.valueChanged.connect(self._on_stent_combo_changed)
         sr.addWidget(self._overlap_spin)
@@ -1099,7 +1101,7 @@ class PlanningWindow(QMainWindow):
         self._nudge_step_spin.setSingleStep(0.5)
         self._nudge_step_spin.setDecimals(1)
         self._nudge_step_spin.setSuffix(" mm")
-        self._nudge_step_spin.setFixedWidth(68)
+        self._nudge_step_spin.setMinimumWidth(68)
         hl.addWidget(self._nudge_step_spin)
 
         hl.addSpacing(10)
@@ -1129,7 +1131,7 @@ class PlanningWindow(QMainWindow):
             for btn_label in btn_labels:
                 mult = {"◀◀": -3, "◀": -1, "▶": +1, "▶▶": +3}[btn_label]
                 btn = QPushButton(btn_label)
-                btn.setFixedWidth(30)
+                btn.setFixedWidth(36)
                 btn.setStyleSheet(_plan_nudge_btn_css())
                 btn.clicked.connect(
                     lambda _=False, k=dir_key, m=mult: self._nudge_in_dir(k, m)
@@ -1278,8 +1280,9 @@ class PlanningWindow(QMainWindow):
         bl.addStretch()
         vl.addWidget(bifurc_row)
 
+        _mc = "#9B9B9B" if _is_dark() else "#6B6B6B"
         self._lbl_bifurc_result = QLabel(
-            "<small style='color:#9B9B9B'>β₁ — · β₂ — · θ —</small>"
+            f"<small style='color:{_mc}'>β₁ — · β₂ — · θ —</small>"
         )
         self._lbl_bifurc_result.setWordWrap(True)
         vl.addWidget(self._lbl_bifurc_result)
@@ -1323,11 +1326,13 @@ class PlanningWindow(QMainWindow):
         self._btn_box_clip.toggled.connect(self._toggle_box_clip)
         vl.addWidget(self._btn_box_clip)
 
+        _mc  = "#9B9B9B" if _is_dark() else "#6B6B6B"
+        _grn = "#3fb950" if _is_dark() else "#1B7A2E"
         guide = QLabel(
-            "<small style='color:#9B9B9B'>"
+            f"<small style='color:{_mc}'>"
             "① Ajusta el cubo arrastrando sus asas en la vista 3D "
             "o editando los spinboxes.<br>"
-            "② Pulsa <b style='color:#3fb950'>✂ Cortar malla</b> para aplicar el recorte."
+            f"② Pulsa <b style='color:{_grn}'>✂ Cortar malla</b> para aplicar el recorte."
             "</small>"
         )
         guide.setWordWrap(True)
@@ -1416,8 +1421,10 @@ class PlanningWindow(QMainWindow):
         self._plan_seps.append(sep_fp)
         vl.addWidget(sep_fp)
 
+        _ttl_c = "#A8B8C6" if _is_dark() else "#4E6678"
+        _mc    = "#9B9B9B" if _is_dark() else "#6B6B6B"
         vl.addWidget(QLabel(
-            "<b style='color:#A8B8C6; font-size:11px;'>✂ Plano de corte libre</b>"
+            f"<b style='color:{_ttl_c}; font-size:11px;'>✂ Plano de corte libre</b>"
         ))
 
         self._btn_plane_clip = QPushButton("Activar plano de corte")
@@ -1428,7 +1435,7 @@ class PlanningWindow(QMainWindow):
         vl.addWidget(self._btn_plane_clip)
 
         vl.addWidget(QLabel(
-            "<small style='color:#9B9B9B'>"
+            f"<small style='color:{_mc}'>"
             "Arrastra el widget de plano en la vista 3D.<br>"
             "La normal (flecha) indica el lado que se conserva."
             "</small>"
@@ -1627,6 +1634,9 @@ class PlanningWindow(QMainWindow):
         self._lbl_annot_count.setStyleSheet(_plan_muted_lbl_css())
         self._lbl_clip_status.setStyleSheet(_plan_muted_lbl_css())
         self._lbl_plane_status.setStyleSheet(_plan_muted_lbl_css())
+
+        # Cascade to sub-panels with their own inline colours
+        self._centerline_panel.apply_theme()
 
         # Toolbar hint label — rebuild HTML with updated colour
         _hint_clr = "#9B9B9B" if _is_dark() else "#6B6B6B"
@@ -1925,6 +1935,10 @@ class PlanningWindow(QMainWindow):
         for actor in self._perf_overlay_actors:
             self._renderer.RemoveActor(actor)
         self._perf_overlay_actors.clear()
+        self._render()
+
+    def request_render(self) -> None:
+        """Public render trigger — used by external panels after actor visibility changes."""
         self._render()
 
     # ------------------------------------------------------------------ #
@@ -3977,8 +3991,9 @@ class PlanningWindow(QMainWindow):
             self._renderer.RemoveActor(actor)
         self._bifurc_actors.clear()
         self._bifurc_pts.clear()
+        _mc = "#9B9B9B" if _is_dark() else "#6B6B6B"
         self._lbl_bifurc_result.setText(
-            "<small style='color:#9B9B9B'>β₁ — · β₂ — · θ —</small>"
+            f"<small style='color:{_mc}'>β₁ — · β₂ — · θ —</small>"
         )
         if self._bifurc_mode:
             from prospective.ui.icons import I as _I

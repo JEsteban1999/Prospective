@@ -273,8 +273,33 @@ class MPRViewer(QWidget):
         )
 
     def _on_position_changed(self, plane: str, index: int) -> None:
-        # Crosshair sync across planes — A-02 follow-up
-        pass
+        """Sync crosshair lines across the three MPR planes when one scrolls.
+
+        Volume shape is (z, y, x); spacing is (sz, sy, sx) in mm.
+        Each slice widget uses physical-mm coordinates for its crosshair:
+          axial   → row = y*sy,  col = x*sx
+          coronal → row = z*sz,  col = x*sx
+          sagital → row = z*sz,  col = y*sy
+        """
+        if self._series is None:
+            return
+        sz, sy, sx = self._series.spacing
+        z = self._axial._current_index
+        y = self._coronal._current_index
+        x = self._sagital._current_index
+
+        if plane == "axial":
+            # z changed — update horizontal crosshair on coronal and sagital
+            self._coronal.set_crosshair(z * sz, x * sx)
+            self._sagital.set_crosshair(z * sz, y * sy)
+        elif plane == "coronal":
+            # y changed — update horizontal crosshair on axial; vertical on sagital
+            self._axial.set_crosshair(y * sy, x * sx)
+            self._sagital.set_crosshair(z * sz, y * sy)
+        elif plane == "sagital":
+            # x changed — update vertical crosshair on axial and coronal
+            self._axial.set_crosshair(y * sy, x * sx)
+            self._coronal.set_crosshair(z * sz, x * sx)
 
     def _open_oblique_viewer(self) -> None:
         """Open (or raise) the oblique MPR dialog for the loaded series."""

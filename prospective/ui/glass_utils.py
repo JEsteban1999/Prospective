@@ -347,15 +347,15 @@ def dialog_qss() -> str:
 QDialog, QWidget {{
     background: {bg};
     color: {txt};
-    font-family: 'Segoe UI', 'Arial', sans-serif;
-    font-size: 12px;
+    font-family: 'Inter', 'Segoe UI Symbol', 'Segoe UI', 'Arial', sans-serif;
+    font-size: 13px;
 }}
 
 /* ── Labels ───────────────────────────────────────────────────── */
 QLabel {{
     color: {txt};
     background: transparent;
-    font-size: 12px;
+    font-size: 13px;
 }}
 QLabel[role="muted"] {{
     color: {txt_muted};
@@ -374,7 +374,7 @@ QLineEdit, QTextEdit {{
     border-radius: 9px;
     color: {txt};
     padding: 5px 10px;
-    font-size: 12px;
+    font-size: 13px;
     selection-background-color: rgba(78,102,120,180);
     selection-color: #ffffff;
 }}
@@ -392,7 +392,7 @@ QComboBox {{
     border-radius: 9px;
     color: {txt};
     padding: 5px 28px 5px 10px;
-    font-size: 12px;
+    font-size: 13px;
     min-height: 28px;
 }}
 QComboBox:focus {{
@@ -455,7 +455,7 @@ QPushButton {{
     border-radius: 9px;
     color: {txt};
     padding: 6px 16px;
-    font-size: 12px;
+    font-size: 13px;
 }}
 QPushButton:hover {{
     background: {bg_hover};
@@ -507,8 +507,8 @@ QTabBar::tab {{
     border-bottom: none;
     border-radius: 8px 8px 0 0;
     color: {txt_muted};
-    padding: 7px 20px;
-    font-size: 12px;
+    padding: 6px 10px;
+    font-size: 11px;
     margin-right: 2px;
 }}
 QTabBar::tab:selected {{
@@ -570,7 +570,7 @@ QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
 QCheckBox {{
     color: {txt};
     spacing: 7px;
-    font-size: 12px;
+    font-size: 13px;
 }}
 QCheckBox::indicator {{
     width: 15px;

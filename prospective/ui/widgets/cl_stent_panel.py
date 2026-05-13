@@ -29,6 +29,15 @@ from PyQt5.QtWidgets import (
 
 logger = logging.getLogger(__name__)
 
+
+def _is_dark() -> bool:
+    try:
+        from prospective.ui.themes import is_dark
+        return is_dark()
+    except Exception:
+        return True
+
+
 # Standard stent diameters (mm) shown in the quick-pick combo
 _STENT_DIAMETERS = [2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0]
 
@@ -124,8 +133,9 @@ class CLStentPanel(QWidget):
         layout.setContentsMargins(6, 6, 6, 6)
         layout.setSpacing(8)
 
+        _mc = "#9B9B9B" if _is_dark() else "#6B6B6B"
         guide = QLabel(
-            "<small style='color:#9B9B9B'>"
+            f"<small style='color:{_mc}'>"
             "Extrae primero la línea central; luego selecciona el segmento "
             "a cubrir y el diámetro del stent."
             "</small>"

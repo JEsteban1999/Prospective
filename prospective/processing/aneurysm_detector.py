@@ -274,12 +274,32 @@ class AneurysmDetector:
             smoother.FeatureEdgeSmoothingOff()
             smoother.BoundarySmoothingOff()
             smoother.Update()
-            curvature_input = smoother.GetOutput()
+
+            # Laplacian smoothing moves vertices but does NOT update the normal
+            # arrays it inherits from the input.  The stale normals would corrupt
+            # the normal_isotropy discriminator computed later.  Recompute them.
+            renorm = vtk.vtkPolyDataNormals()
+            renorm.SetInputConnection(smoother.GetOutputPort())
+            renorm.ComputePointNormalsOn()
+            renorm.ComputeCellNormalsOff()
+            renorm.SplittingOff()
+            renorm.Update()
+            curvature_input = renorm.GetOutput()
             logger.info(
                 "Pre-smooth: %d Laplacian iterations applied to %d-vert mesh "
-                "before curvature computation",
+                "before curvature computation (normals recomputed)",
                 self.pre_smooth_iterations, curvature_input.GetNumberOfPoints(),
             )
+
+        # ── 0c. Triangulation guard ────────────────────────────────────── #
+        # vtkCurvatures requires a purely triangulated mesh.  Quadric
+        # decimation and some smoothers can leave polygonal (n>3) faces.
+        # vtkTriangleFilter is cheap and a no-op when the mesh is already
+        # triangulated — safe to call unconditionally.
+        tri_guard = vtk.vtkTriangleFilter()
+        tri_guard.SetInputData(curvature_input)
+        tri_guard.Update()
+        curvature_input = tri_guard.GetOutput()
 
         # ── 1. Curvature arrays ────────────────────────────────────────── #
         mean_filter = vtk.vtkCurvatures()

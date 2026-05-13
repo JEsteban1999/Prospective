@@ -138,7 +138,14 @@ class DICOMLoader:
         return series
 
     def _extract_metadata(self, dcm_path: str, shape: tuple) -> DicomMetadata:
-        """Read DICOM tags from the first file of the series."""
+        """Read DICOM tags from the first file of the series.
+
+        Handles both classic DICOM (CT/MR multi-file) and Enhanced multi-frame
+        formats (Enhanced XA, Enhanced CT/MR — SOP 1.2.840.10008.5.1.4.1.1.13.*).
+        In Enhanced formats, PixelSpacing and SliceThickness live inside
+        SharedFunctionalGroupsSequence[0].PixelMeasuresSequence[0] rather than
+        at the top level.
+        """
         try:
             ds = pydicom.dcmread(str(dcm_path), stop_before_pixels=True)
         except Exception as exc:
@@ -164,7 +171,53 @@ class DICOMLoader:
             except Exception:
                 return default
 
-        pixel_spacing = getattr(ds, "PixelSpacing", [1.0, 1.0])
+        # ── Pixel spacing / slice thickness ───────────────────────────────── #
+        # Classic DICOM (CT, MR single-frame): PixelSpacing and SliceThickness
+        # are top-level tags.
+        # Enhanced XA / Enhanced CT / Enhanced MR (multi-frame): they are nested
+        # inside SharedFunctionalGroupsSequence[0].PixelMeasuresSequence[0].
+        # We try the top level first; fall back to the functional group only
+        # when the top-level tag is absent (None).
+        pixel_spacing: list[float] = [1.0, 1.0]
+        slice_thickness: float = 1.0
+
+        raw_ps_top = getattr(ds, "PixelSpacing", None)
+        raw_st_top = getattr(ds, "SliceThickness", None)
+
+        if raw_ps_top is not None:
+            try:
+                pixel_spacing = [float(raw_ps_top[0]), float(raw_ps_top[1])]
+            except Exception:
+                logger.debug("Could not parse PixelSpacing %r — using default", raw_ps_top, exc_info=True)
+
+        if raw_st_top is not None:
+            try:
+                slice_thickness = float(raw_st_top)
+            except Exception:
+                logger.debug("Could not parse SliceThickness %r — using default", raw_st_top, exc_info=True)
+
+        # Fallback for Enhanced XA and other multi-frame Enhanced IODs
+        if raw_ps_top is None or raw_st_top is None:
+            try:
+                pms = ds.SharedFunctionalGroupsSequence[0].PixelMeasuresSequence[0]
+                if raw_ps_top is None:
+                    raw_ps2 = getattr(pms, "PixelSpacing", None)
+                    if raw_ps2 is not None:
+                        pixel_spacing = [float(raw_ps2[0]), float(raw_ps2[1])]
+                        logger.debug(
+                            "PixelSpacing resolved from SharedFunctionalGroupsSequence: %s",
+                            pixel_spacing,
+                        )
+                if raw_st_top is None:
+                    raw_st2 = getattr(pms, "SliceThickness", None)
+                    if raw_st2 is not None:
+                        slice_thickness = float(raw_st2)
+                        logger.debug(
+                            "SliceThickness resolved from SharedFunctionalGroupsSequence: %.4f",
+                            slice_thickness,
+                        )
+            except Exception:
+                logger.debug("SharedFunctionalGroupsSequence absent — using default spacing", exc_info=True)
 
         return DicomMetadata(
             patient_name=get_str("PatientName"),
@@ -176,8 +229,8 @@ class DICOMLoader:
             rows=int(get_float("Rows", shape[1])),
             columns=int(get_float("Columns", shape[2])),
             num_slices=shape[0],
-            pixel_spacing=(float(pixel_spacing[0]), float(pixel_spacing[1])),
-            slice_thickness=get_float("SliceThickness", 1.0),
+            pixel_spacing=(pixel_spacing[0], pixel_spacing[1]),
+            slice_thickness=slice_thickness,
             window_center=get_float("WindowCenter", 40.0),
             window_width=get_float("WindowWidth", 400.0),
         )

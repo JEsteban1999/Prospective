@@ -362,30 +362,33 @@ class _ActivityBar(QWidget):
 
     def _apply_btn_qss(self, dark: bool) -> None:
         if dark:
+            # Default: #6A7A8A gives 3.9:1 on the #171B22 sidebar bg — readable
+            # but still subdued relative to hover (#8B9BAA, 8.5:1) and checked (#C8D4DF).
             qss = (
                 "QPushButton {"
                 " border: none; border-left: 3px solid transparent;"
                 " border-radius: 0; background: transparent;"
-                " color: #3A4558; font-size: 20px; padding: 2px; }"
+                " color: #6A7A8A; font-size: 20px; padding: 2px; }"
                 "QPushButton:hover:enabled {"
                 " background: rgba(139,155,170,31); color: #8B9BAA; }"
                 "QPushButton:checked {"
                 " border-left: 3px solid #8B9BAA;"
                 " background: rgba(139,155,170,46); color: #C8D4DF; }"
-                "QPushButton:disabled { color: #222836; }"
+                "QPushButton:disabled { color: #2E3A48; }"
             )
         else:
+            # Default: #5A6A7A gives 4.7:1 on the #E5EBF0 sidebar bg — accessible.
             qss = (
                 "QPushButton {"
                 " border: none; border-left: 3px solid transparent;"
                 " border-radius: 0; background: transparent;"
-                " color: #A0B0C0; font-size: 20px; padding: 2px; }"
+                " color: #5A6A7A; font-size: 20px; padding: 2px; }"
                 "QPushButton:hover:enabled {"
                 " background: rgba(78,102,120,26); color: #4E6678; }"
                 "QPushButton:checked {"
                 " border-left: 3px solid #4E6678;"
                 " background: rgba(78,102,120,36); color: #1A2733; }"
-                "QPushButton:disabled { color: #D0DCE4; }"
+                "QPushButton:disabled { color: #B0BECB; }"
             )
         for btn in self._step_btns:
             btn.setStyleSheet(qss)
@@ -551,19 +554,17 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("PROSPECTIVE — Hybrid Neurovascular Planning Software Platform v0.1")
 
         # ── Screen-aware sizing ───────────────────────────────────────────── #
-        # Clamp the initial window size and position to 92 % of the available
-        # screen geometry so the window always fits on the primary monitor.
-        # This is critical on 1366 × 768 laptops where the hard-coded
-        # 1600 × 960 would extend beyond the right / bottom edges.
+        # Scale the window to 95 % of the available screen geometry so the window
+        # always fits on any monitor (critical on 1366 × 768 laptops).
         from PyQt5.QtWidgets import QApplication as _QApp
         _screen = _QApp.primaryScreen()
         if _screen is not None:
             _avail = _screen.availableGeometry()
-            _w = min(1600, max(1024, int(_avail.width()  * 0.95)))
-            _h = min(960,  max(650,  int(_avail.height() * 0.92)))
+            _w = min(1600, max(900, int(_avail.width()  * 0.95)))
+            _h = min(960,  max(600, int(_avail.height() * 0.92)))
             # Minimum size must never exceed the available geometry.
-            _min_w = min(1024, _avail.width())
-            _min_h = min(650,  _avail.height())
+            _min_w = min(900, _avail.width())
+            _min_h = min(600, _avail.height())
             self.setMinimumSize(_min_w, _min_h)
             self.resize(_w, _h)
             # Centre on the primary screen
@@ -572,8 +573,8 @@ class MainWindow(QMainWindow):
                 _avail.y() + (_avail.height() - _h) // 2,
             )
         else:
-            self.setMinimumSize(1024, 650)
-            self.resize(1600, 960)
+            self.setMinimumSize(900, 600)
+            self.resize(1280, 800)
         # Without WA_DeleteOnClose, close() only *hides* this window — the C++
         # object is never destroyed, QObject.destroyed is never emitted, and the
         # WelcomeWindow callback (_on_main_window_closed) never fires.
@@ -666,6 +667,7 @@ class MainWindow(QMainWindow):
         self._left_tabs = QTabWidget()
         self._left_tabs.setDocumentMode(True)
         self._left_tabs.setTabBarAutoHide(True)
+        self._left_tabs.tabBar().setExpanding(False)   # natural tab width; no elision
         self._left_tabs.addTab(self._mpr, f"{_I.MPR_VIEW}  MPR (4 vistas)")
         # Tab 1 is inserted lazily by _show_planning_tab() on first step-5 visit.
 
@@ -726,92 +728,6 @@ class MainWindow(QMainWindow):
         # Placeholder so _arrange_docks() is a no-op (no dock to size).
         self._dock_patient = None
 
-    def _build_tools_dock(self) -> None:
-        dock = QDockWidget("Herramientas", self)
-        dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
-        dock.setFeatures(
-            QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable
-        )
-
-        root = QWidget()
-        layout = QVBoxLayout(root)
-        layout.setContentsMargins(6, 6, 6, 6)
-        layout.setSpacing(8)
-
-        # Window / Level group
-        wl_grp = QGroupBox("Ventana / Nivel (HU)")
-        wl_form = QFormLayout()
-
-        self._preset_combo = QComboBox()
-        for name in WINDOW_PRESETS:
-            self._preset_combo.addItem(name)
-        idx = self._preset_combo.findText(DEFAULT_PRESET)
-        if idx >= 0:
-            self._preset_combo.setCurrentIndex(idx)
-        self._preset_combo.currentTextChanged.connect(self._on_preset_changed)
-        wl_form.addRow("Preset:", self._preset_combo)
-
-        self._wc_spin = QDoubleSpinBox()
-        self._wc_spin.setRange(-2000, 4000)
-        self._wc_spin.setValue(WINDOW_PRESETS[DEFAULT_PRESET][0])
-        self._wc_spin.setSuffix(" HU")
-        self._wc_spin.setDecimals(0)
-        self._wc_spin.valueChanged.connect(self._on_wl_changed)
-        wl_form.addRow("Centro:", self._wc_spin)
-
-        self._ww_spin = QDoubleSpinBox()
-        self._ww_spin.setRange(1, 4000)
-        self._ww_spin.setValue(WINDOW_PRESETS[DEFAULT_PRESET][1])
-        self._ww_spin.setSuffix(" HU")
-        self._ww_spin.setDecimals(0)
-        self._ww_spin.valueChanged.connect(self._on_wl_changed)
-        wl_form.addRow("Ancho:", self._ww_spin)
-
-        wl_grp.setLayout(wl_form)
-        layout.addWidget(wl_grp)
-
-        # Volume info group
-        vol_grp = QGroupBox("Volumen")
-        vol_form = QFormLayout()
-        self._lbl_dims = QLabel("—")
-        self._lbl_spacing = QLabel("—")
-        self._lbl_series_desc = QLabel("—")
-        self._lbl_series_desc.setWordWrap(True)
-        vol_form.addRow("Dimensiones:", self._lbl_dims)
-        vol_form.addRow("Espaciado:", self._lbl_spacing)
-        vol_form.addRow("Serie:", self._lbl_series_desc)
-        vol_grp.setLayout(vol_form)
-        layout.addWidget(vol_grp)
-
-        # 3-D rendering group
-        from prospective.rendering.transfer_functions import PRESETS_3D
-        vtk3d_grp = QGroupBox("Visor 3D")
-        vtk3d_form = QFormLayout()
-
-        self._3d_mode_combo = QComboBox()
-        for mode in ("VR (Ray Casting)", "MIP", "MinIP"):
-            self._3d_mode_combo.addItem(mode)
-        self._3d_mode_combo.currentTextChanged.connect(
-            lambda name: self._mpr.set_3d_blend_mode(name)
-        )
-        vtk3d_form.addRow("Modo:", self._3d_mode_combo)
-
-        self._3d_preset_combo = QComboBox()
-        for name in PRESETS_3D:
-            self._3d_preset_combo.addItem(name)
-        self._3d_preset_combo.currentTextChanged.connect(
-            lambda name: self._mpr.set_3d_preset(name)
-        )
-        vtk3d_form.addRow("Preset TF:", self._3d_preset_combo)
-
-        vtk3d_grp.setLayout(vtk3d_form)
-        layout.addWidget(vtk3d_grp)
-
-        layout.addStretch()
-        dock.setWidget(root)
-        self.addDockWidget(Qt.RightDockWidgetArea, dock)
-        self._dock_tools = dock
-
     # ------------------------------------------------------------------ #
     # Workflow stepper dock (replaces all individual tool docks)           #
     # ------------------------------------------------------------------ #
@@ -824,6 +740,11 @@ class MainWindow(QMainWindow):
             from PyQt5.QtWidgets import QTabWidget
             tw = QTabWidget()
             tw.setTabPosition(QTabWidget.North)
+            # Natural tab width: each tab is as wide as its text + padding.
+            # When all tabs exceed the bar width, Qt shows scroll arrows instead
+            # of force-squishing text (which would cause "Asistente de cl..." elision).
+            tw.tabBar().setExpanding(False)
+            tw.tabBar().setUsesScrollButtons(True)
             for label, widget in pairs:
                 tw.addTab(widget, label)
             return tw
@@ -918,6 +839,9 @@ class MainWindow(QMainWindow):
         )
         self._perforator_panel.overlay_cleared.connect(
             self._on_perforator_overlay_cleared
+        )
+        self._perforator_panel.render_requested.connect(
+            self._on_perforator_render_requested
         )
 
         step5 = _tab([
@@ -1057,8 +981,19 @@ class MainWindow(QMainWindow):
         # ── Status label ──────────────────────────────────────────────── #
         self._lbl_load_status = QLabel("No hay ningún estudio cargado.")
         self._lbl_load_status.setWordWrap(True)
-        self._lbl_load_status.setStyleSheet("color: #9B9B9B; font-size: 10px;")
+        _mc = "#9B9B9B" if _is_dark_mw() else "#6B6B6B"
+        self._lbl_load_status.setStyleSheet(f"color: {_mc}; font-size: 10px;")
         layout.addWidget(self._lbl_load_status)
+
+        # ── Non-3D projection warning (hidden until a 2D series is loaded) #
+        self._lbl_projection_warn = QLabel()
+        self._lbl_projection_warn.setWordWrap(True)
+        self._lbl_projection_warn.setStyleSheet(
+            "color: #C07000; background: #FFF8E1; border: 1px solid #E0A000;"
+            "border-radius: 4px; padding: 4px 6px; font-size: 10px;"
+        )
+        self._lbl_projection_warn.setVisible(False)
+        layout.addWidget(self._lbl_projection_warn)
 
         # ── HU windowing ──────────────────────────────────────────────── #
         wl_grp = QGroupBox("Ventana / Nivel (HU)")
@@ -1190,15 +1125,14 @@ class MainWindow(QMainWindow):
             self._central_splitter.setSizes(_SPLITS[idx])
 
         # Step 5 (idx=4, 0-based): show the embedded 3D planning tab.
-        # Step 3 (idx=2, detection): keep the 3D planning tab visible if the
-        #   planning window has already been opened, so the user can browse
-        #   aneurysm candidates while watching their geometry update in 3D
-        #   without being forced back to the MPR view.
+        # Step 3 (idx=2, detection): also open the 3D planning tab so the
+        #   yellow sphere + billboard label created by highlight_candidate()
+        #   are actually visible when the user selects a candidate row.
+        #   Without this, _planning_window is None at step 3 and
+        #   highlight_candidate() is never called → no yellow sphere.
         # Every other step: make sure the MPR tab is active.
-        if idx == 4:
+        if idx in (2, 4):
             self._show_planning_tab()
-        elif idx == 2 and self._planning_window is not None and hasattr(self, "_left_tabs"):
-            self._left_tabs.setCurrentIndex(self._left_tabs.indexOf(self._planning_window))
         elif hasattr(self, "_left_tabs"):
             self._left_tabs.setCurrentIndex(0)
 
@@ -1281,175 +1215,6 @@ class MainWindow(QMainWindow):
             self._triplanar_act.blockSignals(True)
             self._triplanar_act.setChecked(False)
             self._triplanar_act.blockSignals(False)
-
-    def _build_segmentation_dock(self) -> None:
-        dock = QDockWidget("Segmentación 3D", self)
-        dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
-        dock.setFeatures(
-            QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable
-        )
-
-        self._seg_panel = SegmentationPanel()
-        self._seg_panel.seg_ready.connect(self._on_seg_ready)
-        self._seg_panel.preview_ready.connect(self._on_seg_preview_ready)
-        self._seg_panel.mesh_visibility_changed.connect(self._mpr.set_mesh_visible)
-        self._seg_panel.volume_visibility_changed.connect(self._mpr.set_volume_visible)
-        self._seg_panel.export_stl_requested.connect(self._export_stl)
-        self._seg_panel.export_obj_requested.connect(self._export_obj)
-
-        dock.setWidget(self._seg_panel)
-        self.addDockWidget(Qt.RightDockWidgetArea, dock)
-        self._dock_seg = dock
-
-    def _build_aneurysm_dock(self) -> None:
-        dock = QDockWidget("Detección de Aneurismas", self)
-        dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
-        dock.setFeatures(
-            QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable
-        )
-
-        self._aneurysm_panel = AneurysmPanel()
-        self._aneurysm_panel.candidate_highlighted.connect(self._on_aneurysm_highlighted)
-        self._aneurysm_panel.candidate_isolated.connect(self._on_aneurysm_isolated)
-        self._aneurysm_panel.export_requested.connect(self._export_aneurysm_stl)
-        self._aneurysm_panel.mesh_cropped.connect(self._on_aneurysm_mesh_cropped)
-        # Candidate visibility toggle (uses handler to update both VTK widgets)
-        self._aneurysm_panel.candidate_visibility_changed.connect(
-            self._on_candidate_visibility_changed
-        )
-
-        dock.setWidget(self._aneurysm_panel)
-        self.addDockWidget(Qt.RightDockWidgetArea, dock)
-        self._dock_aneurysm = dock
-
-    def _build_morphometrics_dock(self) -> None:
-        dock = QDockWidget("Morfometría", self)
-        dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
-        dock.setFeatures(
-            QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable
-        )
-
-        self._morpho_panel = MorphometricsPanel()
-
-        # candidate_confirmed is the ONLY signal that advances to morphometrics.
-        self._aneurysm_panel.candidate_confirmed.connect(self._on_candidate_for_morpho)
-
-        dock.setWidget(self._morpho_panel)
-        self.addDockWidget(Qt.RightDockWidgetArea, dock)
-        self._dock_morpho = dock
-
-    def _build_longitudinal_dock(self) -> None:
-        from PyQt5.QtWidgets import QDockWidget
-        dock = QDockWidget(f"{_I.CENTERLINE} Seguimiento longitudinal", self)
-        dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
-        dock.setFeatures(
-            QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable
-        )
-        self._longitudinal_panel = LongitudinalPanel()
-        # Feed each new morphometric result to the panel (but don't auto-add —
-        # the user controls when to register a new time-point)
-        self._morpho_panel.analysis_done.connect(
-            self._longitudinal_panel.set_current_result
-        )
-        dock.setWidget(self._longitudinal_panel)
-        self.addDockWidget(Qt.RightDockWidgetArea, dock)
-        self._dock_longitudinal = dock
-
-    def _build_clip_recommender_dock(self) -> None:
-        dock = QDockWidget(f"{_I.SEARCH} Selección de clips", self)
-        dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
-        dock.setFeatures(
-            QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable
-        )
-        self._clip_recommender_panel = ClipRecommenderPanel()
-        self._morpho_panel.analysis_done.connect(
-            self._clip_recommender_panel.set_morpho_result
-        )
-        # Forward selected clip to clip panel selector
-        self._clip_recommender_panel.clip_selected.connect(
-            lambda spec: self._clip_panel.select_clip_by_name(spec.name)
-            if hasattr(self, "_clip_panel") else None
-        )
-        dock.setWidget(self._clip_recommender_panel)
-        self.addDockWidget(Qt.RightDockWidgetArea, dock)
-        self._dock_clip_recommender = dock
-
-    def _build_clip_dock(self) -> None:
-        dock = QDockWidget("Planificación de Clips", self)
-        dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
-        dock.setFeatures(
-            QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable
-        )
-
-        self._clip_panel = ClipPanel()
-        self._clip_panel.clip_placed.connect(self._on_clip_placed)
-        self._clip_panel.clip_removed.connect(self._mpr.remove_clip)
-        self._clip_panel.clip_removed.connect(lambda _: self._sync_report_clips())
-        self._clip_panel.clip_visibility_changed.connect(self._mpr.set_clip_visible)
-        self._clip_panel.clip_transform_changed.connect(self._mpr.update_clip_transform)
-        self._clip_panel.trajectory_changed.connect(self._mpr.set_trajectory)
-
-        # When morphometrics finishes, forward neck + centroid to clip panel
-        self._morpho_panel.analysis_done.connect(self._on_morpho_done_for_clips)
-
-        dock.setWidget(self._clip_panel)
-        self.addDockWidget(Qt.RightDockWidgetArea, dock)
-        self._dock_clip = dock
-
-    def _build_coil_dock(self) -> None:
-        dock = QDockWidget("Embolización (Coils)", self)
-        dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
-        dock.setFeatures(
-            QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable
-        )
-
-        self._coil_panel = CoilPanel()
-        self._coil_panel.coil_placed.connect(self._on_coil_placed)
-        self._coil_panel.coil_removed.connect(self._on_coil_removed)
-        self._coil_panel.coil_visibility_changed.connect(self._on_coil_visibility)
-
-        # Forward morphometrics → coil panel for sizing / packing calculation
-        self._morpho_panel.analysis_done.connect(self._on_morpho_done_for_coils)
-
-        dock.setWidget(self._coil_panel)
-        self.addDockWidget(Qt.RightDockWidgetArea, dock)
-        self._dock_coil = dock
-
-    def _build_report_dock(self) -> None:
-        dock = QDockWidget("Informe PDF", self)
-        dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
-        dock.setFeatures(
-            QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable
-        )
-
-        self._report_panel = ReportPanel()
-        self._report_panel.screenshot_requested.connect(self._capture_screenshot)
-
-        # Forward morphometrics to report panel
-        self._morpho_panel.analysis_done.connect(self._report_panel.set_morphometrics)
-
-        # Forward trajectory changes to report panel
-        self._clip_panel.trajectory_changed.connect(
-            lambda entry, target: self._report_panel.set_trajectory(
-                list(entry) if entry is not None else [],
-                list(target) if target is not None else [],
-            )
-        )
-
-        dock.setWidget(self._report_panel)
-        self.addDockWidget(Qt.RightDockWidgetArea, dock)
-        self._dock_report = dock
-
-    def _build_print_dock(self) -> None:
-        dock = QDockWidget(f"{_I.STEP_EXPORT} Impresión 3D", self)
-        dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
-        dock.setFeatures(
-            QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable
-        )
-        self._print_panel = PrintPrepPanel()
-        dock.setWidget(self._print_panel)
-        self.addDockWidget(Qt.RightDockWidgetArea, dock)
-        self._dock_print = dock
 
     def _arrange_docks(self) -> None:
         """Level-3 layout: no QDockWidgets remain; splitter sizes are set in
@@ -1655,9 +1420,8 @@ class MainWindow(QMainWindow):
         self._statusbar.addPermanentWidget(self._progress)
 
         self._user_lbl = QLabel()
-        self._user_lbl.setStyleSheet(
-            "color:#9B9B9B; font-size:10px; padding-right:8px;"
-        )
+        _mc = "#9B9B9B" if _is_dark_mw() else "#6B6B6B"
+        self._user_lbl.setStyleSheet(f"color:{_mc}; font-size:10px; padding-right:8px;")
         self._statusbar.addPermanentWidget(self._user_lbl)
 
         self._statusbar.showMessage(
@@ -1786,6 +1550,27 @@ class MainWindow(QMainWindow):
         self._lbl_spacing.setText(f"{sx:.2f} × {sy:.2f} × {sz:.2f} mm")
         desc = m.series_description or m.study_description or "—"
         self._lbl_series_desc.setText(desc)
+
+        # ── Non-3D projection detection ───────────────────────────────── #
+        # A proper 3DRA/CT volume has ≥ 10 slices and roughly isotropic
+        # spacing (sz ≤ 4 × in-plane pixel size).  Projection series like
+        # 2D XA cine runs or biplane roadmaps have very few slices or
+        # extreme z-anisotropy; they load without error but produce
+        # meaningless 3D segmentation (disconnected slab stacks).
+        # Threshold is 4× (not 3×) to accommodate thick-slice CT volumes
+        # such as CAMACHO 606 (spacing 0.54 × 0.54 × 1.75 mm, ratio ≈ 3.24).
+        _in_plane = max(sx, sy)
+        _is_projection = z < 10 or (sz > 4.0 * _in_plane and _in_plane > 0)
+        if hasattr(self, "_lbl_projection_warn"):
+            if _is_projection:
+                self._lbl_projection_warn.setText(
+                    "⚠ Esta serie parece ser una proyección 2D "
+                    f"({z} láminas, espaciado Z={sz:.1f} mm). "
+                    "La segmentación 3D puede no ser significativa."
+                )
+                self._lbl_projection_warn.setVisible(True)
+            else:
+                self._lbl_projection_warn.setVisible(False)
 
         self._series_tree.clear()
         item = QTreeWidgetItem([desc, str(z)])
@@ -1961,6 +1746,9 @@ class MainWindow(QMainWindow):
         """
         self._vessel_poly = poly_data
         self._mpr.set_mesh(poly_data)
+        # Explicitly clear the magenta aneurysm highlight so a stale candidate
+        # from a previous detection run is never left visible after re-segmenting.
+        self._mpr.set_aneurysm(None)
         self._aneurysm_panel.set_mesh(poly_data)
         self._clip_panel.set_vessel_mesh(poly_data)
         self._morpho_panel.set_mesh(None)   # clear — morpho only runs on candidates
@@ -1969,6 +1757,7 @@ class MainWindow(QMainWindow):
             self._perforator_panel.set_vessel_mesh(poly_data)
         if self._planning_window is not None:
             self._planning_window.set_vessel_mesh(poly_data)
+            self._planning_window.set_aneurysm(None)   # clear in planning window too
 
     def _on_seg_preview_ready(self, result) -> None:
         """Fast-preview update: refresh MPR mesh only; no downstream panel effects."""
@@ -2096,6 +1885,11 @@ class MainWindow(QMainWindow):
         """Remove perforator risk actors from the planning window."""
         if self._planning_window is not None:
             self._planning_window.clear_perforator_overlay()
+
+    def _on_perforator_render_requested(self) -> None:
+        """Re-render the planning window after a perforator visibility toggle."""
+        if self._planning_window is not None:
+            self._planning_window.request_render()
 
     def _on_coil_placed(self, index: int, name: str, position, poly_data) -> None:
         """Handle coil placement — add actor to planning window and update report."""
@@ -2480,12 +2274,8 @@ class MainWindow(QMainWindow):
         # Segmentation panel — store the full state dict (all adv_* keys etc.)
         data.seg_state = self._seg_panel.get_session_state()
 
-        # Aneurysm detection panel
-        det = self._aneurysm_panel.get_session_state()
-        data.det_percentile = det["percentile"]
-        data.det_min_r_mm   = det["min_r_mm"]
-        data.det_max_r_mm   = det["max_r_mm"]
-        data.det_min_pts    = det["min_pts"]
+        # Aneurysm detection panel — full state (all 8 params incl. v5/v7 fields)
+        data.det_state = self._aneurysm_panel.get_session_state()
 
         # Clips + trajectory
         clip_state = self._clip_panel.get_session_state()
@@ -2535,6 +2325,15 @@ class MainWindow(QMainWindow):
         # Morphometrics snapshot (if available)
         if self._morpho_panel._result is not None:
             data.morpho_snapshot = self._morpho_panel._result.to_dict()
+
+        # Clinical state: PHASES score inputs + parent artery diam + treatment decision
+        data.clinical_state = {
+            **self._morpho_panel.get_session_state(),       # phases + parent_diam
+            "treatment": self._treatment_panel.get_session_state(),
+        }
+
+        # 3D-print preparation parameters
+        data.print_prep_state = self._print_panel.get_session_state()
 
         # Report / patient data
         rep = self._report_panel.get_session_state()
@@ -2792,12 +2591,7 @@ class MainWindow(QMainWindow):
         self._seg_panel.restore_session_state(data.seg_state)
 
         # Aneurysm detection
-        self._aneurysm_panel.restore_session_state({
-            "percentile": data.det_percentile,
-            "min_r_mm":   data.det_min_r_mm,
-            "max_r_mm":   data.det_max_r_mm,
-            "min_pts":    data.det_min_pts,
-        })
+        self._aneurysm_panel.restore_session_state(data.det_state)
 
         # Clips + trajectory
         clip_dict = {
@@ -2861,6 +2655,23 @@ class MainWindow(QMainWindow):
                 {"stents": self._pending_session_stents}
             )
             self._pending_session_stents = []
+
+        # Morphometrics labels (populated even before mesh reload so the user
+        # can review previous results immediately after loading the session)
+        if data.morpho_snapshot:
+            self._morpho_panel.restore_session_state(
+                data.morpho_snapshot,
+                data.clinical_state,
+            )
+
+        # Treatment decision: restore location + ruptured inputs only
+        # (_recompute fires automatically when set_morpho_result() is called later)
+        self._treatment_panel.restore_session_state(
+            data.clinical_state.get("treatment", {})
+        )
+
+        # 3D-print preparation parameters
+        self._print_panel.restore_session_state(data.print_prep_state)
 
         # Report / patient data
         self._report_panel.restore_session_state({
@@ -3039,6 +2850,12 @@ class MainWindow(QMainWindow):
             self._clip_panel.apply_theme()
         if hasattr(self, "_coil_panel"):
             self._coil_panel.apply_theme()
+        # Refresh inline-styled muted labels that depend on the theme colour
+        _mc = "#9B9B9B" if is_dark() else "#6B6B6B"
+        if hasattr(self, "_lbl_load_status"):
+            self._lbl_load_status.setStyleSheet(f"color: {_mc}; font-size: 10px;")
+        if hasattr(self, "_user_lbl"):
+            self._user_lbl.setStyleSheet(f"color:{_mc}; font-size:10px; padding-right:8px;")
 
     # ------------------------------------------------------------------ #
     # Window title                                                         #

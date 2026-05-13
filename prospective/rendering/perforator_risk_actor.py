@@ -45,10 +45,12 @@ _RING_OPACITY     = 0.07
 class PerforatorRiskActors(NamedTuple):
     """All VTK actors for one perforator risk overlay."""
 
-    overlay:   vtk.vtkActor        # colour-mapped vessel surface
-    spheres:   list[vtk.vtkActor]  # candidate marker spheres
-    labels:    list                 # vtkBillboardTextActor3D labels
-    neck_ring: vtk.vtkActor        # translucent boundary sphere at r_low
+    overlay:     vtk.vtkActor        # colour-mapped vessel surface
+    spheres:     list[vtk.vtkActor]  # candidate marker spheres (one per candidate)
+    labels:      list                 # vtkBillboardTextActor3D labels (one per candidate)
+    neck_ring:   vtk.vtkActor        # translucent boundary sphere at r_low
+    risk_levels: tuple[int, ...] = ()
+    # Parallel to spheres/labels: risk_level of the i-th candidate (1=high,2=med,3=low)
 
     def __iter__(self):
         yield self.overlay
@@ -57,9 +59,28 @@ class PerforatorRiskActors(NamedTuple):
         yield self.neck_ring
 
     def set_visible(self, visible: bool) -> None:
+        """Show or hide ALL actors (overlay + markers + labels + neck ring)."""
         v = int(visible)
         for a in self:
             a.SetVisibility(v)
+
+    def set_overlay_visible(self, visible: bool) -> None:
+        """Show or hide the colour-mapped vessel surface only."""
+        self.overlay.SetVisibility(int(visible))
+
+    def set_neck_ring_visible(self, visible: bool) -> None:
+        """Show or hide the translucent risk-boundary sphere."""
+        self.neck_ring.SetVisibility(int(visible))
+
+    def set_risk_level_visible(self, risk_level: int, visible: bool) -> None:
+        """Show or hide sphere markers + labels for one risk level (1/2/3)."""
+        v = int(visible)
+        for i, lvl in enumerate(self.risk_levels):
+            if lvl == risk_level:
+                if i < len(self.spheres):
+                    self.spheres[i].SetVisibility(v)
+                if i < len(self.labels):
+                    self.labels[i].SetVisibility(v)
 
 
 # ──────────────────────────────────────────────────────────────────────────── #
@@ -79,10 +100,11 @@ def build_risk_actors(result: PerforatorRiskResult) -> PerforatorRiskActors:
     PerforatorRiskActors — NamedTuple, iterable over all actors.
     """
     return PerforatorRiskActors(
-        overlay   = _build_overlay(result),
-        spheres   = _build_spheres(result.candidates),
-        labels    = _build_labels(result.candidates),
-        neck_ring = _build_neck_ring(result.neck_origin, result.zone_radii_mm[2]),
+        overlay     = _build_overlay(result),
+        spheres     = _build_spheres(result.candidates),
+        labels      = _build_labels(result.candidates),
+        neck_ring   = _build_neck_ring(result.neck_origin, result.zone_radii_mm[2]),
+        risk_levels = tuple(c.risk_level for c in result.candidates),
     )
 
 

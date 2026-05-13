@@ -22,7 +22,7 @@ import logging
 from pathlib import Path
 
 import vtk
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, QEvent, pyqtSignal
 from PyQt5.QtWidgets import (
     QCheckBox,
     QDoubleSpinBox,
@@ -298,8 +298,9 @@ class StentPanel(QWidget):
         outer.addWidget(scroll)
 
         # Guide text
+        _mc = "#9B9B9B" if _is_dark() else "#6B6B6B"
         guide = QLabel(
-            "<small style='color:#9B9B9B'>"
+            f"<small style='color:{_mc}'>"
             "El stent se orienta a lo largo del eje Z local. "
             "Ajuste posición y rotación para alinearlo con el vaso parental."
             "</small>"
@@ -319,11 +320,13 @@ class StentPanel(QWidget):
 
         self._chk_flow_div = QCheckBox("Desviadores de flujo")
         self._chk_flow_div.setChecked(True)
+        self._chk_flow_div.setToolTip("Incluir desviadores de flujo en la lista de dispositivos")
         self._chk_flow_div.toggled.connect(self._refresh_stent_list)
         fr.addWidget(self._chk_flow_div)
 
         self._chk_ic = QCheckBox("Stents IC")
         self._chk_ic.setChecked(True)
+        self._chk_ic.setToolTip("Incluir stents intracraneales convencionales en la lista")
         self._chk_ic.toggled.connect(self._refresh_stent_list)
         fr.addWidget(self._chk_ic)
         sf.addWidget(filter_row)
@@ -352,6 +355,7 @@ class StentPanel(QWidget):
                 "border-radius:8px;color:#6B6B6B;font-size:10px;padding:3px 6px;}"
                 "QPushButton:hover{background:#DDE5EC;color:#0D0D0D;}"
             )
+        self._btn_import.setToolTip("Carga un modelo 3D personalizado (STL u OBJ) como stent")
         self._btn_import.clicked.connect(self._import_custom)
         sf.addWidget(self._btn_import)
 
@@ -392,6 +396,7 @@ class StentPanel(QWidget):
                 "border-radius:9px;color:#2E4A5F;font-weight:bold;}"
                 "QPushButton:hover{background:#8B9BAA;color:#ffffff;}"
             )
+        self._btn_place.setToolTip("Coloca el stent seleccionado en las coordenadas indicadas")
         self._btn_place.clicked.connect(self._place_stent)
         layout.addWidget(self._btn_place)
 
@@ -404,6 +409,7 @@ class StentPanel(QWidget):
         self._placed_list.setAlternatingRowColors(True)
         self._placed_list.setMaximumHeight(90)
         self._placed_list.currentRowChanged.connect(self._on_placed_selected)
+        self._placed_list.installEventFilter(self)
         pl.addWidget(self._placed_list)
 
         btn_row = QWidget()
@@ -413,11 +419,13 @@ class StentPanel(QWidget):
 
         self._btn_toggle = QPushButton("Mostrar/Ocultar")
         self._btn_toggle.setEnabled(False)
+        self._btn_toggle.setToolTip("Muestra u oculta el stent seleccionado en la vista 3D")
         self._btn_toggle.clicked.connect(self._toggle_selected)
         br.addWidget(self._btn_toggle)
 
         self._btn_remove = QPushButton("Eliminar")
         self._btn_remove.setEnabled(False)
+        self._btn_remove.setToolTip("Elimina el stent seleccionado de la escena  [Supr]")
         self._btn_remove.setStyleSheet(
             "QPushButton{color:#f85149;}"
             "QPushButton:hover{background:rgba(248,81,73,15);border-color:#f85149;}"
@@ -455,6 +463,7 @@ class StentPanel(QWidget):
         # ── Export ────────────────────────────────────────────────────── #
         self._btn_export = QPushButton("Exportar plan CSV")
         self._btn_export.setEnabled(False)
+        self._btn_export.setToolTip("Exporta el plan de stents con posiciones y orientaciones a CSV")
         self._btn_export.clicked.connect(self._export_plan)
         layout.addWidget(self._btn_export)
 
@@ -468,9 +477,11 @@ class StentPanel(QWidget):
         sf2.setVerticalSpacing(3)
 
         self._spin_prox = self._make_diam_spin()
+        self._spin_prox.setToolTip("Diámetro del vaso padre en la zona proximal al aneurisma")
         sf2.addRow("Ø proximal:", self._spin_prox)
 
         self._spin_dist = self._make_diam_spin()
+        self._spin_dist.setToolTip("Diámetro del vaso padre en la zona distal al aneurisma")
         sf2.addRow("Ø distal:", self._spin_dist)
 
         self._spin_neck_len = self._make_diam_spin()
@@ -485,6 +496,7 @@ class StentPanel(QWidget):
         self._spin_margin.setDecimals(1)
         self._spin_margin.setSuffix(" mm")
         self._spin_margin.setValue(5.0)
+        self._spin_margin.setToolTip("Longitud de anclaje del stent a cada lado del cuello del aneurisma")
         sf2.addRow("Margen anclaje:", self._spin_margin)
 
         # SC-1: vessel curvature (radius, set from trajectory)
@@ -638,6 +650,18 @@ class StentPanel(QWidget):
                 "QPushButton:hover{background:#2da44e;color:#ffffff;}"
                 "QPushButton:disabled{color:#AAAAAA;border-color:#D0D0D0;background:#F0F0F0;}"
             )
+
+    # ------------------------------------------------------------------ #
+    # Event filter (keyboard Delete on placed list)                        #
+    # ------------------------------------------------------------------ #
+
+    def eventFilter(self, obj: object, event: object) -> bool:
+        """Delete key on _placed_list removes the selected stent."""
+        if obj is self._placed_list and event.type() == QEvent.KeyPress:
+            if event.key() == Qt.Key_Delete:
+                self._remove_selected()
+                return True
+        return super().eventFilter(obj, event)
 
     # ------------------------------------------------------------------ #
     # Catalogue list                                                       #

@@ -50,7 +50,7 @@ _HEADER_H   = 56   # px
 _INPUT_QSS = (
     f"QLineEdit{{background:{_INPUT_BG}; border:1px solid {_INPUT_BORD};"
     f"border-radius:11px; color:{_WHITE}; padding:0 12px;"
-    f"font-size:12px; selection-background-color:#4E6678;}}"
+    f"font-size:13px; selection-background-color:#4E6678;}}"
     f"QLineEdit:focus{{border:1px solid {_INPUT_FOCUS}; background:rgba(10,18,30,210);}}"
     f"QLineEdit::placeholder{{color:rgba(139,155,170,140);}}"
 )
@@ -104,7 +104,7 @@ def _resolve_video() -> str | None:
 def _lbl(text: str, size: int = 11, color: str = _WHITE,
          bold: bool = False) -> QLabel:
     lbl = QLabel(text)
-    f = QFont("Segoe UI", size)
+    f = QFont("Inter", size)
     f.setBold(bold)
     lbl.setFont(f)
     lbl.setStyleSheet(f"color:{color}; background:transparent; border:none;")
@@ -127,7 +127,7 @@ def _field_row(icon: str, placeholder: str, pw: bool = False) -> tuple[QWidget, 
     edit.setStyleSheet(
         f"QLineEdit{{background:{_INPUT_BG}; border:1px solid {_INPUT_BORD};"
         f"border-radius:11px; color:{_WHITE}; padding:0 12px 0 38px;"
-        f"font-size:12px; selection-background-color:#4E6678;}}"
+        f"font-size:13px; selection-background-color:#4E6678;}}"
         f"QLineEdit:focus{{border:1px solid {_INPUT_FOCUS}; background:rgba(10,18,30,210);}}"
     )
     lay.addWidget(edit)
@@ -223,7 +223,7 @@ class LoginDialog(QDialog):
         lay.setSpacing(0)
 
         title = QLabel("PROSPECTIVE")
-        title.setFont(QFont("Segoe UI", 18, QFont.Bold))
+        title.setFont(QFont("Inter", 18, QFont.Bold))
         title.setStyleSheet(f"color:{_WHITE}; background:transparent;")
         lay.addWidget(title)
         lay.addStretch()

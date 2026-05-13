@@ -10,19 +10,22 @@ Two non-destructive operations are provided; neither modifies the input mesh:
       Keep geometry inside a sphere defined by (center, radius).
       Uses a single vtkClipPolyData with a vtkSphere implicit function.
 
-Plane math (vtkClipPolyData with InsideOutOff — the default):
-  The filter keeps cells where f(p) <= 0.
+Plane math (vtkClipPolyData with InsideOutOn):
+  InsideOutOn keeps cells where f(p) < 0 (negative side of the implicit function).
   For vtkPlane: f(p) = normal · (p − origin).
 
   To keep x >= xmin → normal=(-1,0,0), origin=(xmin,0,0)
-    f = -(x-xmin) <= 0  when x >= xmin  ✓
+    f = -(x-xmin) < 0  when x > xmin  ✓
   To keep x <= xmax → normal=(+1,0,0), origin=(xmax,0,0)
-    f =  (x-xmax) <= 0  when x <= xmax  ✓
+    f =  (x-xmax) < 0  when x < xmax  ✓
   (same pattern for Y and Z)
 
 Sphere math:
   vtkSphere: f(p) = |p - center|² − radius²
-  InsideOutOff keeps f <= 0, i.e., inside the sphere  ✓
+  InsideOutOn keeps f < 0, i.e., inside the sphere  ✓
+
+Note on VTK convention: the DEFAULT (InsideOutOff) keeps where f > 0 — the OUTSIDE of the
+implicit function.  We always use InsideOutOn so that "inside the box / sphere" is retained.
 """
 from __future__ import annotations
 
@@ -81,7 +84,7 @@ def clip_box(
         clipper = vtk.vtkClipPolyData()
         clipper.SetInputData(data)
         clipper.SetClipFunction(plane)
-        clipper.InsideOutOff()   # keep where f(p) <= 0
+        clipper.InsideOutOn()   # keep where f(p) < 0 (inside the half-space)
         clipper.Update()
         data = clipper.GetOutput()
 
@@ -135,7 +138,7 @@ def clip_sphere(
     clipper = vtk.vtkClipPolyData()
     clipper.SetInputData(poly)
     clipper.SetClipFunction(sphere)
-    clipper.InsideOutOff()   # vtkSphere f(p) = |p-c|²-r²; f<=0 inside sphere ✓
+    clipper.InsideOutOn()   # vtkSphere f(p) = |p-c|²-r²; f<0 inside sphere → kept ✓
     clipper.Update()
 
     clean = vtk.vtkCleanPolyData()

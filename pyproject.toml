@@ -29,6 +29,10 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v --tb=short"
+markers = [
+    "slow: marks tests as slow (run with -m slow or --run-slow)",
+    "real_data: marks tests that require the DICOM resource files to be present",
+]
 
 [tool.coverage.run]
 source = ["prospective"]

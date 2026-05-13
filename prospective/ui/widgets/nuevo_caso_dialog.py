@@ -372,8 +372,14 @@ class NuevoCasoDialog(QDialog):
 
         title = "Editar caso clínico" if self._edit_mode else "Nuevo caso clínico"
         self.setWindowTitle(title)
-        self.setMinimumSize(1020, 680)
-        self.resize(1100, 720)
+        self.setMinimumSize(820, 560)
+        from PyQt5.QtWidgets import QApplication as _QApp
+        _scr = _QApp.primaryScreen()
+        if _scr is not None:
+            _av = _scr.availableGeometry()
+            self.resize(min(1100, int(_av.width() * 0.88)), min(720, int(_av.height() * 0.88)))
+        else:
+            self.resize(1050, 680)
         self.setWindowFlags(
             Qt.Dialog | Qt.WindowTitleHint | Qt.WindowCloseButtonHint
         )
@@ -405,7 +411,8 @@ class NuevoCasoDialog(QDialog):
 
         # ── Left decorative panel ─────────────────────────────────────── #
         left = _LeftPanel()
-        left.setFixedWidth(260)
+        left.setFixedWidth(220)
+        left.setMinimumWidth(160)
         left_lay = QVBoxLayout(left)
         left_lay.setContentsMargins(24, 32, 24, 24)
         left_lay.setSpacing(12)
@@ -437,7 +444,7 @@ class NuevoCasoDialog(QDialog):
         skull_row = QHBoxLayout()
         skull_row.setSpacing(6)
         logo_lbl = QLabel("PROSPECTIVE™")
-        f = QFont("Segoe UI", 14, QFont.Bold)
+        f = QFont("Inter",14, QFont.Bold)
         logo_lbl.setFont(f)
         logo_lbl.setStyleSheet(f"color:{_ACCENT};")
         skull_row.addWidget(logo_lbl)
@@ -488,7 +495,7 @@ class NuevoCasoDialog(QDialog):
         tb_lay = QHBoxLayout(title_bar)
         tb_lay.setContentsMargins(24, 0, 24, 0)
         tb_title = QLabel("CASO NUEVO")
-        tb_title.setFont(QFont("Segoe UI", 16, QFont.Bold))
+        tb_title.setFont(QFont("Inter",16, QFont.Bold))
         tb_title.setStyleSheet(f"color:{_TXT};")
         tb_lay.addWidget(tb_title)
         tb_lay.addStretch()
@@ -589,7 +596,7 @@ class NuevoCasoDialog(QDialog):
         self._fld_dob.setDisplayFormat("dd/MM/yyyy")
         self._fld_dob.setCalendarPopup(True)
         self._fld_dob.setDate(QDate(1970, 1, 1))
-        self._fld_dob.setFixedWidth(130)
+        self._fld_dob.setMaximumWidth(160)
         self._lbl_edad = QLabel("—")
         self._lbl_edad.setStyleSheet(f"color:{_MUTED}; font-size:11px;")
         self._fld_dob.dateChanged.connect(self._update_age)
@@ -603,7 +610,7 @@ class NuevoCasoDialog(QDialog):
         self._cmb_sex = QComboBox()
         for val, label in _SEX_OPTS:
             self._cmb_sex.addItem(label, val)
-        self._cmb_sex.setFixedWidth(140)
+        self._cmb_sex.setMaximumWidth(180)
         gf.addRow("Sexo:", self._cmb_sex)
 
         # Ocupación
@@ -619,7 +626,7 @@ class NuevoCasoDialog(QDialog):
         self._fld_fecha.setDisplayFormat("dd/MM/yyyy")
         self._fld_fecha.setCalendarPopup(True)
         self._fld_fecha.setDate(QDate.currentDate())
-        self._fld_fecha.setFixedWidth(130)
+        self._fld_fecha.setMaximumWidth(160)
         gf.addRow("Fecha del caso:", self._fld_fecha)
 
         grp.setLayout(gf)
@@ -654,7 +661,7 @@ class NuevoCasoDialog(QDialog):
             rl.setSpacing(8)
 
             chk = QCheckBox(label)
-            chk.setFixedWidth(130)
+            chk.setMaximumWidth(160)
             ta = _textarea(f"Detalle los antecedentes {label.lower()}…", rows=2)
             ta.setEnabled(False)
             chk.toggled.connect(ta.setEnabled)
@@ -710,7 +717,7 @@ class NuevoCasoDialog(QDialog):
         self._cmb_lat = QComboBox()
         for lat in _LATERALIDAD:
             self._cmb_lat.addItem(lat or "— seleccionar —", lat)
-        self._cmb_lat.setFixedWidth(180)
+        self._cmb_lat.setMaximumWidth(200)
         gf.addRow("Lateralidad:", self._cmb_lat)
 
         # Tratamiento propuesto — 3 focused checkboxes
@@ -759,14 +766,15 @@ class NuevoCasoDialog(QDialog):
         al.setContentsMargins(0, 0, 0, 0)
         al.setSpacing(8)
         angio_lbl = QLabel("Angiógrafo:")
-        angio_lbl.setFixedWidth(160)
+        angio_lbl.setMinimumWidth(80)
+        angio_lbl.setMaximumWidth(180)
         angio_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         al.addWidget(angio_lbl)
         self._fld_angio_marca = _field("Marca / modelo", 100)
         self._cmb_angio_tipo = QComboBox()
         for t in _ANGIO_TIPO:
             self._cmb_angio_tipo.addItem(t or "Tipo", t)
-        self._cmb_angio_tipo.setFixedWidth(120)
+        self._cmb_angio_tipo.setMaximumWidth(140)
         al.addWidget(self._fld_angio_marca, stretch=1)
         al.addWidget(self._cmb_angio_tipo)
         gl.addWidget(angio_row)
@@ -785,7 +793,8 @@ class NuevoCasoDialog(QDialog):
         row_l.setSpacing(6)
 
         lbl = QLabel(label)
-        lbl.setFixedWidth(160)
+        lbl.setMinimumWidth(80)
+        lbl.setMaximumWidth(180)
         lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         row_l.addWidget(lbl)
 

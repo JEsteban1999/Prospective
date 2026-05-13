@@ -285,3 +285,35 @@ class PHASESPanel(QWidget):
             "PHASES score=%d  risk5=%.1f%%  (P=%d H=%d A=%d S=%d E=%d S2=%d)",
             total, risk, p_pts, h_pts, a_pts, s_pts, e_pts, s2_pts,
         )
+
+    # ------------------------------------------------------------------ #
+    # Session persistence                                                  #
+    # ------------------------------------------------------------------ #
+
+    def get_session_state(self) -> dict:
+        """Return all PHASES inputs as a serialisable dict."""
+        return {
+            "pop_idx":  self._cmb_pop.currentIndex(),
+            "htn":      self._chk_htn.isChecked(),
+            "age":      self._chk_age.isChecked(),
+            "sah":      self._chk_sah.isChecked(),
+            "site_idx": self._cmb_site.currentIndex(),
+        }
+
+    def restore_session_state(self, state: dict) -> None:
+        """Restore PHASES inputs from a previously saved state dict."""
+        if not state:
+            return
+        # Block signals to avoid multiple _recalculate() calls during restore
+        for w in (self._cmb_pop, self._cmb_site,
+                  self._chk_htn, self._chk_age, self._chk_sah):
+            w.blockSignals(True)
+        self._cmb_pop.setCurrentIndex(int(state.get("pop_idx", 0)))
+        self._cmb_site.setCurrentIndex(int(state.get("site_idx", 0)))
+        self._chk_htn.setChecked(bool(state.get("htn", False)))
+        self._chk_age.setChecked(bool(state.get("age", False)))
+        self._chk_sah.setChecked(bool(state.get("sah", False)))
+        for w in (self._cmb_pop, self._cmb_site,
+                  self._chk_htn, self._chk_age, self._chk_sah):
+            w.blockSignals(False)
+        self._recalculate()

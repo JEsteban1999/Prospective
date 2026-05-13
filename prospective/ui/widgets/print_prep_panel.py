@@ -373,3 +373,35 @@ class PrintPrepPanel(QWidget):
                 f"✖ No cabe ({dx:.0f}×{dy:.0f}×{dz:.0f} > {bx:.0f}×{by:.0f}×{bz:.0f} mm)"
             )
             self._lbl_bed_fit.setStyleSheet("color: #f85149;")
+
+    # ------------------------------------------------------------------ #
+    # Session persistence                                                  #
+    # ------------------------------------------------------------------ #
+
+    def get_session_state(self) -> dict:
+        """Return all preparation parameters as a serialisable dict."""
+        return {
+            "size":   self._spin_size.value(),
+            "smooth": self._spin_smooth.value(),
+            "relax":  self._spin_relax.value(),
+            "fill":   self._chk_fill.isChecked(),
+            "hole":   self._spin_hole.value(),
+            "sub":    self._chk_sub.isChecked(),
+            "bed":    self._combo_bed.currentText(),
+        }
+
+    def restore_session_state(self, state: dict) -> None:
+        """Restore preparation parameters from a previously saved state dict."""
+        if not state:
+            return
+        self._spin_size.setValue(float(state.get("size", 80.0)))
+        self._spin_smooth.setValue(int(state.get("smooth", 20)))
+        self._spin_relax.setValue(float(state.get("relax", 0.1)))
+        self._chk_fill.setChecked(bool(state.get("fill", True)))
+        self._spin_hole.setValue(float(state.get("hole", 5.0)))
+        self._chk_sub.setChecked(bool(state.get("sub", False)))
+        bed = state.get("bed", "")
+        if bed:
+            idx = self._combo_bed.findText(bed)
+            if idx >= 0:
+                self._combo_bed.setCurrentIndex(idx)

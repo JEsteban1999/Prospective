@@ -44,6 +44,14 @@ from PyQt5.QtWidgets import (
 from prospective.ui.viewers.slice_widget import SliceWidget
 
 
+def _is_dark() -> bool:
+    try:
+        from prospective.ui.themes import is_dark
+        return is_dark()
+    except Exception:
+        return True
+
+
 class TriplanarPanel(QWidget):
     """
     Side-by-side display of the three orthogonal MPR planes.
@@ -98,10 +106,11 @@ class TriplanarPanel(QWidget):
         outer.setSpacing(4)
 
         # ── Header ────────────────────────────────────────────────────── #
+        _hdr_clr = "#8B9BAA" if _is_dark() else "#4E6678"
         hdr = QLabel("Vista triplanar  —  Axial (Z) · Coronal (Y) · Sagital (X)")
         hdr.setAlignment(Qt.AlignCenter)
         hdr.setStyleSheet(
-            "color:#8B9BAA; font-size:11px; font-weight:bold;"
+            f"color:{_hdr_clr}; font-size:11px; font-weight:bold;"
             "letter-spacing:1px; padding:4px 0;"
         )
         outer.addWidget(hdr)

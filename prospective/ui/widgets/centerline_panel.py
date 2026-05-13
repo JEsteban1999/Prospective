@@ -31,6 +31,14 @@ from PyQt5.QtWidgets import (
 logger = logging.getLogger(__name__)
 
 
+def _is_dark() -> bool:
+    try:
+        from prospective.ui.themes import is_dark
+        return is_dark()
+    except Exception:
+        return True
+
+
 # ──────────────────────────────────────────────────────────────────────────── #
 # Background workers                                                             #
 # ──────────────────────────────────────────────────────────────────────────── #
@@ -127,16 +135,37 @@ class CenterlinePanel(QWidget):
     def set_source_point(self, pt: tuple) -> None:
         self._source_mm = pt
         self._lbl_src.setText(f"({pt[0]:.1f}, {pt[1]:.1f}, {pt[2]:.1f})")
-        self._lbl_src.setStyleSheet("color: #3fb950;")   # green
+        # Green: bright on dark (#3fb950, 5.9:1 on #1F1F1F), deep on light (#1B7A2E, 5.2:1 on #FFF)
+        _grn = "#3fb950" if _is_dark() else "#1B7A2E"
+        self._lbl_src.setStyleSheet(f"color: {_grn};")
         self._btn_src.setText("✔ Origen")
         self._update_extract_btn()
 
     def set_target_point(self, pt: tuple) -> None:
         self._target_mm = pt
         self._lbl_tgt.setText(f"({pt[0]:.1f}, {pt[1]:.1f}, {pt[2]:.1f})")
-        self._lbl_tgt.setStyleSheet("color: #f85149;")   # red
+        # Red: bright on dark (#f85149, 4.5:1 on #1F1F1F), deep on light (#C62828, 5.8:1 on #FFF)
+        _red = "#f85149" if _is_dark() else "#C62828"
+        self._lbl_tgt.setStyleSheet(f"color: {_red};")
         self._btn_tgt.setText("✔ Destino")
         self._update_extract_btn()
+
+    def apply_theme(self) -> None:
+        """Re-apply inline colours when the UI theme changes."""
+        _mc = "#9B9B9B" if _is_dark() else "#6B6B6B"
+        self._guide_lbl.setText(
+            f"<small style='color:{_mc}'>"
+            "Marca origen y destino sobre el vaso; la línea central "
+            "sigue el eje medial por mínimo coste (radio máximo)."
+            "</small>"
+        )
+        # Re-apply src/tgt label colours if points are already set
+        if self._source_mm is not None:
+            _grn = "#3fb950" if _is_dark() else "#1B7A2E"
+            self._lbl_src.setStyleSheet(f"color: {_grn};")
+        if self._target_mm is not None:
+            _red = "#f85149" if _is_dark() else "#C62828"
+            self._lbl_tgt.setStyleSheet(f"color: {_red};")
 
     # ------------------------------------------------------------------ #
     # UI construction                                                      #
@@ -148,14 +177,16 @@ class CenterlinePanel(QWidget):
         layout.setSpacing(8)
 
         # ── Guide label ───────────────────────────────────────────────── #
-        guide = QLabel(
-            "<small style='color:#9B9B9B'>"
+        # Muted text: #9B9B9B on dark (5.9:1 on #1F1F1F), #6B6B6B on light (5.1:1 on #FFF)
+        _mc = "#9B9B9B" if _is_dark() else "#6B6B6B"
+        self._guide_lbl = QLabel(
+            f"<small style='color:{_mc}'>"
             "Marca origen y destino sobre el vaso; la línea central "
             "sigue el eje medial por mínimo coste (radio máximo)."
             "</small>"
         )
-        guide.setWordWrap(True)
-        layout.addWidget(guide)
+        self._guide_lbl.setWordWrap(True)
+        layout.addWidget(self._guide_lbl)
 
         # ── Endpoint pickers ──────────────────────────────────────────── #
         grp_pts = QGroupBox("Puntos extremos")

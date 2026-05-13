@@ -187,20 +187,20 @@ class SliceWidget(QWidget):
         # Measurement mode buttons — styled by apply_theme()
         self._btn_cal = QPushButton("Cal.")
         self._btn_cal.setCheckable(True)
-        self._btn_cal.setFixedHeight(22)
+        self._btn_cal.setFixedHeight(24)
         self._btn_cal.setToolTip("Calibre de distancia: clic en dos puntos → distancia en mm")
         self._btn_cal.toggled.connect(lambda c: self._set_meas_mode("distance" if c else "off"))
         hl.addWidget(self._btn_cal)
 
         self._btn_ang = QPushButton("Ang.")
         self._btn_ang.setCheckable(True)
-        self._btn_ang.setFixedHeight(22)
+        self._btn_ang.setFixedHeight(24)
         self._btn_ang.setToolTip("Medición de ángulo: clic en tres puntos (A, vértice, B) → ángulo en °")
         self._btn_ang.toggled.connect(lambda c: self._set_meas_mode("angle" if c else "off"))
         hl.addWidget(self._btn_ang)
 
         self._btn_clr = QPushButton("✕")
-        self._btn_clr.setFixedHeight(22)
+        self._btn_clr.setFixedHeight(24)
         self._btn_clr.setToolTip("Borrar todas las mediciones de este plano")
         self._btn_clr.clicked.connect(self._clear_measurements)
         hl.addWidget(self._btn_clr)
@@ -256,7 +256,7 @@ class SliceWidget(QWidget):
         self._spinbox.setMinimum(1)
         self._spinbox.setMaximum(1)
         self._spinbox.setValue(1)
-        self._spinbox.setFixedWidth(52)
+        self._spinbox.setFixedWidth(62)
         self._spinbox.valueChanged.connect(self._on_spinbox_changed)
         nav_layout.addWidget(self._spinbox)
 
@@ -292,20 +292,25 @@ class SliceWidget(QWidget):
             f"color:{fg}; font-weight:bold; font-size:11px; letter-spacing:1px;"
         )
 
-        # Measurement buttons
+        # Measurement buttons — checked state adapts to theme
+        _chk_bg  = "#1a2a40" if dark else "#DDE5EC"
+        _chk_bdr = "#4fc3f7" if dark else "#1565C0"
+        _chk_clr = "#4fc3f7" if dark else "#1565C0"
+        # Clear button text colour: bright red on dark, deep red on light
+        _clr_clr = "#f85149" if dark else "#C62828"
         _btn_qss = (
             f"QPushButton{{background:{tc['btn_bg']};border:1px solid {tc['btn_bdr']};"
             f"border-radius:5px;color:{tc['btn_clr']};font-size:10px;"
             f"padding:2px 6px;min-height:0;}}"
-            f"QPushButton:checked{{background:#1a2a40;border-color:#4fc3f7;"
-            f"color:#4fc3f7;font-weight:bold;}}"
+            f"QPushButton:checked{{background:{_chk_bg};border-color:{_chk_bdr};"
+            f"color:{_chk_clr};font-weight:bold;}}"
             f"QPushButton:hover{{background:{tc['btn_hov']};color:{tc['btn_en']};}}"
         )
         self._btn_cal.setStyleSheet(_btn_qss)
         self._btn_ang.setStyleSheet(_btn_qss)
         self._btn_clr.setStyleSheet(
             f"QPushButton{{background:{tc['btn_bg']};border:1px solid {tc['btn_bdr']};"
-            f"border-radius:5px;color:#f85149;font-size:10px;padding:2px 6px;min-height:0;}}"
+            f"border-radius:5px;color:{_clr_clr};font-size:10px;padding:2px 6px;min-height:0;}}"
             f"QPushButton:hover{{background:{'#2d1117' if dark else '#fde8e8'};}}"
         )
 

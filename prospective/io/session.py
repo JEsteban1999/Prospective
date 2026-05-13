@@ -20,7 +20,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-SESSION_VERSION = "1.4"   # bumped: report_text + report_treatment fields added
+SESSION_VERSION = "1.6"   # bumped: clinical_state (PHASES + treatment decision) and print_prep_state added
 SESSION_EXT     = ".prospective"
 
 
@@ -89,10 +89,13 @@ class SessionData:
     seg_mesh_path: str = ""
 
     # ── Aneurysm detection ─────────────────────────────────────────────── #
-    det_percentile: float  = 88.0
-    det_min_r_mm: float    = 1.0
-    det_max_r_mm: float    = 20.0
-    det_min_pts: int       = 8
+    # Full dict returned by AneurysmPanel.get_session_state() — mirrors the
+    # pattern used by seg_state above.  All 8 panel params are persisted
+    # (percentile, gauss_percentile, min_r_mm, max_r_mm, min_pts,
+    # min_pos_gauss_frac, min_sphericity, pre_smooth_iters).
+    # Backward-compat: old sessions only have 4 keys; the panel's
+    # restore_session_state fills the rest with sensible defaults.
+    det_state: dict = field(default_factory=dict)
 
     # ── Placed clips ───────────────────────────────────────────────────── #
     clips: list[ClipState] = field(default_factory=list)
@@ -131,6 +134,17 @@ class SessionData:
     # Full narrative report text (anamnesis, findings, plan…)
     report_text: str          = ""
 
+    # ── Clinical context (PHASES score + treatment decision) ───────────── #
+    # Dict with keys:
+    #   "phases"      → {pop_idx, htn, age, sah, site_idx}
+    #   "parent_diam" → float (parent artery diameter in mm, 0 = unknown)
+    #   "treatment"   → {location, ruptured}
+    clinical_state: dict = field(default_factory=dict)
+
+    # ── 3D-print preparation parameters ───────────────────────────────── #
+    # Dict with keys: size, smooth, relax, fill, hole, sub, bed
+    print_prep_state: dict = field(default_factory=dict)
+
     # ------------------------------------------------------------------ #
     # Serialisation                                                        #
     # ------------------------------------------------------------------ #
@@ -155,12 +169,7 @@ class SessionData:
             },
             "segmentation":  self.seg_state,
             "seg_mesh_path": self.seg_mesh_path,
-            "aneurysm_detection": {
-                "percentile": self.det_percentile,
-                "min_r_mm":   self.det_min_r_mm,
-                "max_r_mm":   self.det_max_r_mm,
-                "min_pts":    self.det_min_pts,
-            },
+            "aneurysm_detection": self.det_state,
             "clips": [
                 {
                     "index":       c.index,
@@ -215,6 +224,8 @@ class SessionData:
                 "treatment":    self.report_treatment,
                 "text":         self.report_text,
             },
+            "clinical_state":   self.clinical_state,
+            "print_prep_state": self.print_prep_state,
         }
         return d
 
@@ -286,10 +297,7 @@ class SessionData:
             hu_max            = r3d.get("hu_max", 1500.0),
             seg_state         = seg,
             seg_mesh_path     = d.get("seg_mesh_path", ""),
-            det_percentile    = det.get("percentile", 88.0),
-            det_min_r_mm      = det.get("min_r_mm", 1.0),
-            det_max_r_mm      = det.get("max_r_mm", 20.0),
-            det_min_pts       = det.get("min_pts", 8),
+            det_state         = det,
             clips             = clips,
             coils             = coils,
             stents            = stents,
@@ -309,6 +317,8 @@ class SessionData:
             report_notes        = d.get("report", {}).get("notes", ""),
             report_treatment    = d.get("report", {}).get("treatment", ""),
             report_text         = d.get("report", {}).get("text", ""),
+            clinical_state      = d.get("clinical_state", {}),
+            print_prep_state    = d.get("print_prep_state", {}),
         )
 
 

@@ -516,7 +516,7 @@ class TreatmentDecisionPanel(QWidget):
         icon_lbl = QLabel(icon_text)
         icon_lbl.setFixedWidth(18)
         icon_lbl.setStyleSheet(
-            f"font-size:12px; color:{icon_color}; background:transparent;"
+            f"font-size:13px; color:{icon_color}; background:transparent;"
         )
         row.addWidget(icon_lbl)
 
@@ -565,6 +565,36 @@ class TreatmentDecisionPanel(QWidget):
                 font-size: 10px;
             }}
         """
+
+    # ------------------------------------------------------------------ #
+    # Session persistence                                                  #
+    # ------------------------------------------------------------------ #
+
+    def get_session_state(self) -> dict:
+        """Return clinical context inputs as a serialisable dict."""
+        return {
+            "location": self._combo_location.currentText(),
+            "ruptured": self._chk_ruptured.isChecked(),
+        }
+
+    def restore_session_state(self, state: dict) -> None:
+        """Restore clinical context from a previously saved state dict.
+
+        Does NOT call _recompute() — that will happen automatically when
+        set_morpho_result() is called later in the session restore flow.
+        """
+        if not state:
+            return
+        loc = state.get("location", "")
+        if loc:
+            idx = self._combo_location.findText(loc)
+            if idx >= 0:
+                self._combo_location.blockSignals(True)
+                self._combo_location.setCurrentIndex(idx)
+                self._combo_location.blockSignals(False)
+        self._chk_ruptured.blockSignals(True)
+        self._chk_ruptured.setChecked(bool(state.get("ruptured", False)))
+        self._chk_ruptured.blockSignals(False)
 
 
 # ──────────────────────────────────────────────────────────────────────────── #

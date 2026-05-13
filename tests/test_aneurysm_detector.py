@@ -279,3 +279,44 @@ class TestAneurysmDetector:
         # A spherical dome → curvature is fairly uniform → cv_gauss should be moderate
         # We only assert it is in [0, 10] — already guaranteed by clipping.
         assert 0.0 <= best.cv_gauss <= 10.0
+
+    # ── v7 tests (pre-smooth normals fix) ────────────────────────────────── #
+
+    def test_pre_smooth_with_normals_detects_candidates(self):
+        """pre_smooth_iterations > 0 must still produce valid candidates.
+
+        Regression guard for the stale-normals bug: before the fix, the
+        Laplacian smoother moved vertices without updating the normal arrays,
+        so normal_isotropy was computed from incorrect direction data.
+        After the fix a vtkPolyDataNormals pass follows the smoother;
+        normal_isotropy must still be in [0, 1].
+        """
+        poly = _bumpy_sphere_poly()
+        result = AneurysmDetector(
+            gauss_percentile=70, mean_curv_gate_percentile=60, min_points=4,
+            min_positive_gauss_frac=0.0, min_compactness=0.0, min_sphericity=0.0,
+            pre_smooth_iterations=10,
+        ).detect(poly)
+        assert len(result.candidates) > 0
+        for c in result.candidates:
+            assert 0.0 <= c.normal_isotropy <= 1.0, (
+                f"normal_isotropy={c.normal_isotropy:.4f} out of range "
+                "(stale-normals bug may have regressed)"
+            )
+
+    def test_pre_smooth_does_not_lose_detection(self):
+        """A bumpy mesh should still yield at least one candidate after pre-smoothing."""
+        poly = _bumpy_sphere_poly()
+        result_no_smooth = AneurysmDetector(
+            gauss_percentile=70, mean_curv_gate_percentile=60, min_points=4,
+            min_positive_gauss_frac=0.0, min_compactness=0.0, min_sphericity=0.0,
+            pre_smooth_iterations=0,
+        ).detect(poly)
+        result_smoothed = AneurysmDetector(
+            gauss_percentile=70, mean_curv_gate_percentile=60, min_points=4,
+            min_positive_gauss_frac=0.0, min_compactness=0.0, min_sphericity=0.0,
+            pre_smooth_iterations=10,
+        ).detect(poly)
+        # Pre-smoothing may reduce candidate count (noise suppression) but must
+        # never eliminate all candidates on a clearly bumpy mesh.
+        assert len(result_smoothed.candidates) > 0

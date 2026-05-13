@@ -23,7 +23,7 @@ import math
 from pathlib import Path
 
 import vtk
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, QEvent, pyqtSignal
 from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -254,6 +254,7 @@ class CoilPanel(QWidget):
 
         self._chk_filter_size = QCheckBox("Filtrar por tamaño")
         self._chk_filter_size.setChecked(True)
+        self._chk_filter_size.setToolTip("Muestra solo coils compatibles con el diámetro del domo del aneurisma")
         self._chk_filter_size.toggled.connect(self._refresh_coil_list)
         fr.addWidget(self._chk_filter_size)
 
@@ -261,6 +262,7 @@ class CoilPanel(QWidget):
         self._cmb_type.addItem("Todos los tipos", None)
         for ct in CoilType:
             self._cmb_type.addItem(ct.value, ct)
+        self._cmb_type.setToolTip("Filtra la lista por tipo de coil embolizador")
         self._cmb_type.currentIndexChanged.connect(self._refresh_coil_list)
         fr.addWidget(self._cmb_type, stretch=1)
 
@@ -290,6 +292,7 @@ class CoilPanel(QWidget):
                 "border-radius:8px;color:#6B6B6B;font-size:10px;padding:3px 6px;}"
                 "QPushButton:hover{background:#DDE5EC;color:#0D0D0D;}"
             )
+        self._btn_import.setToolTip("Carga un modelo 3D personalizado (STL u OBJ) como coil")
         self._btn_import.clicked.connect(self._import_custom)
         sf.addWidget(self._btn_import)
 
@@ -330,6 +333,7 @@ class CoilPanel(QWidget):
                 "border-radius:9px;color:#1B5E20;font-weight:bold;}"
                 "QPushButton:hover{background:#A5D6A7;}"
             )
+        self._btn_place.setToolTip("Deposita el coil seleccionado en el saco del aneurisma")
         self._btn_place.clicked.connect(self._place_coil)
         layout.addWidget(self._btn_place)
 
@@ -351,7 +355,7 @@ class CoilPanel(QWidget):
         self._spin_target_pct.setRange(10, 50)
         self._spin_target_pct.setValue(25)
         self._spin_target_pct.setSuffix(" %")
-        self._spin_target_pct.setFixedWidth(60)
+        self._spin_target_pct.setMinimumWidth(62)
         self._spin_target_pct.setToolTip(
             "Densidad de empaquetado objetivo.\n"
             "≥25% asociado a menores tasas de recanalización\n"
@@ -374,6 +378,7 @@ class CoilPanel(QWidget):
         self._placed_list.setAlternatingRowColors(True)
         self._placed_list.setMaximumHeight(90)
         self._placed_list.currentRowChanged.connect(self._on_placed_selected)
+        self._placed_list.installEventFilter(self)
         pl.addWidget(self._placed_list)
 
         btn_row = QWidget()
@@ -383,11 +388,13 @@ class CoilPanel(QWidget):
 
         self._btn_toggle = QPushButton("Mostrar/Ocultar")
         self._btn_toggle.setEnabled(False)
+        self._btn_toggle.setToolTip("Muestra u oculta el coil seleccionado en la vista 3D")
         self._btn_toggle.clicked.connect(self._toggle_selected)
         br.addWidget(self._btn_toggle)
 
         self._btn_remove = QPushButton("Eliminar")
         self._btn_remove.setEnabled(False)
+        self._btn_remove.setToolTip("Elimina el coil seleccionado del saco  [Supr]")
         self._btn_remove.setStyleSheet(
             "QPushButton{color:#f85149;}"
             "QPushButton:hover{background:rgba(248,81,73,15);border-color:#f85149;}"
@@ -402,11 +409,24 @@ class CoilPanel(QWidget):
         # ── Export ────────────────────────────────────────────────────── #
         self._btn_export = QPushButton("Exportar plan CSV")
         self._btn_export.setEnabled(False)
+        self._btn_export.setToolTip("Exporta el plan de embolización con todos los coils a CSV")
         self._btn_export.clicked.connect(self._export_plan)
         layout.addWidget(self._btn_export)
 
         layout.addStretch()
         self._refresh_coil_list()
+
+    # ------------------------------------------------------------------ #
+    # Event filter (keyboard Delete on placed list)                        #
+    # ------------------------------------------------------------------ #
+
+    def eventFilter(self, obj: object, event: object) -> bool:
+        """Delete key on _placed_list removes the selected coil."""
+        if obj is self._placed_list and event.type() == QEvent.KeyPress:
+            if event.key() == Qt.Key_Delete:
+                self._remove_selected()
+                return True
+        return super().eventFilter(obj, event)
 
     # ------------------------------------------------------------------ #
     # Theme                                                                #
@@ -552,9 +572,10 @@ class CoilPanel(QWidget):
             note  = f"Insuficiente (faltan {target - pct:.1f}%)"
 
         n_coils   = len(self._placed)
+        _mc = "#9B9B9B" if _is_dark() else "#6B6B6B"
         self._lbl_packing.setText(
             f"<span style='color:{color}'>{icon} {pct:.1f}%  —  {note}</span><br>"
-            f"<small style='color:#9B9B9B'>"
+            f"<small style='color:{_mc}'>"
             f"{n_coils} coil(s) · Vol. hilo: {packed_vol:.2f} mm³ / "
             f"{total_vol:.1f} mm³</small>"
         )

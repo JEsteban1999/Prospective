@@ -102,3 +102,99 @@ class TestSessionData:
         assert d2.traj_entry   == [10.0, 20.0, 30.0]
         assert d2.traj_target  == [1.0, 2.0, 3.0]
         assert d2.traj_visible is True
+
+    # ── v1.6 fields ────────────────────────────────────────────────────── #
+
+    def test_clinical_state_roundtrip(self, tmp_path):
+        """clinical_state (PHASES + parent_diam + treatment) survives save/load."""
+        d = SessionData()
+        d.clinical_state = {
+            "phases": {
+                "pop_idx": 2,
+                "htn": True,
+                "age": False,
+                "sah": True,
+                "site_idx": 1,
+            },
+            "parent_diam": 4.5,
+            "treatment": {
+                "location": "Basilar",
+                "ruptured": False,
+            },
+        }
+        path = str(tmp_path / "clinical.prospective")
+        save_session(d, path)
+        d2 = load_session(path)
+
+        cs = d2.clinical_state
+        assert cs["phases"]["pop_idx"] == 2
+        assert cs["phases"]["htn"] is True
+        assert cs["phases"]["sah"] is True
+        assert cs["phases"]["site_idx"] == 1
+        assert cs["parent_diam"] == pytest.approx(4.5)
+        assert cs["treatment"]["location"] == "Basilar"
+        assert cs["treatment"]["ruptured"] is False
+
+    def test_clinical_state_defaults_to_empty(self, tmp_path):
+        """Older sessions without clinical_state key load without error."""
+        d = SessionData()
+        raw = d.to_dict()
+        raw.pop("clinical_state", None)   # simulate old session file
+        with tempfile.NamedTemporaryFile(
+            suffix=".prospective", delete=False, mode="w", encoding="utf-8"
+        ) as f:
+            import json as _json
+            _json.dump(raw, f)
+            fpath = f.name
+        d2 = load_session(fpath)
+        assert d2.clinical_state == {}
+
+    def test_print_prep_state_roundtrip(self, tmp_path):
+        """print_prep_state (7 mesh-prep params) survives save/load."""
+        d = SessionData()
+        d.print_prep_state = {
+            "size":   120.0,
+            "smooth": 30,
+            "relax":  0.15,
+            "fill":   False,
+            "hole":   8.0,
+            "sub":    True,
+            "bed":    "Bambu Lab X1C (256×256×256 mm)",
+        }
+        path = str(tmp_path / "print.prospective")
+        save_session(d, path)
+        d2 = load_session(path)
+
+        ps = d2.print_prep_state
+        assert ps["size"]   == pytest.approx(120.0)
+        assert ps["smooth"] == 30
+        assert ps["relax"]  == pytest.approx(0.15)
+        assert ps["fill"]   is False
+        assert ps["hole"]   == pytest.approx(8.0)
+        assert ps["sub"]    is True
+        assert ps["bed"]    == "Bambu Lab X1C (256×256×256 mm)"
+
+    def test_print_prep_state_defaults_to_empty(self, tmp_path):
+        """Older sessions without print_prep_state key load without error."""
+        d = SessionData()
+        raw = d.to_dict()
+        raw.pop("print_prep_state", None)   # simulate old session file
+        with tempfile.NamedTemporaryFile(
+            suffix=".prospective", delete=False, mode="w", encoding="utf-8"
+        ) as f:
+            import json as _json
+            _json.dump(raw, f)
+            fpath = f.name
+        d2 = load_session(fpath)
+        assert d2.print_prep_state == {}
+
+    def test_v16_json_keys_present(self, tmp_path):
+        """Saved file must contain both v1.6 top-level keys."""
+        d = SessionData()
+        d.clinical_state   = {"phases": {"pop_idx": 0}}
+        d.print_prep_state = {"size": 80.0}
+        path = str(tmp_path / "v16.prospective")
+        save_session(d, path)
+        raw = json.loads(Path(path).read_text(encoding="utf-8"))
+        assert "clinical_state"   in raw
+        assert "print_prep_state" in raw

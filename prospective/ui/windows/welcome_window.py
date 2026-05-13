@@ -195,16 +195,19 @@ class _PQRSDialog(QDialog):
         lay.setSpacing(12)
         lay.setContentsMargins(28, 22, 28, 22)
 
+        # Accent colour: smoke-gray in dark (good contrast on #07101e),
+        # deeper teal-blue in light (4.9:1 on #F4F7FA — meets AA).
+        _accent_c = "#8B9BAA" if _pqrs_is_dark() else "#4E6678"
         title = QLabel("Contáctenos")
-        title.setFont(QFont("Segoe UI", 14, QFont.Bold))
-        title.setStyleSheet("color:#8B9BAA;")
+        title.setFont(QFont("Inter", 14, QFont.Bold))
+        title.setStyleSheet(f"color:{_accent_c};")
         lay.addWidget(title)
 
         note = QLabel(
             "Su mensaje será atendido por el equipo de PROSPECTIVE "
             "(Fundación Universitaria Navarra UNINAVARRA)."
         )
-        note.setStyleSheet("color:#8B9BAA; font-size:11px;")
+        note.setStyleSheet(f"color:{_accent_c}; font-size:11px;")
         note.setWordWrap(True)
         lay.addWidget(note)
 
@@ -246,9 +249,17 @@ class _PQRSDialog(QDialog):
             "color:#fff;font-weight:bold;padding:6px 24px;}"
             "QPushButton:hover{background:#8B9BAA;}"
         )
+        btn_send.setDefault(True)
         btn_send.clicked.connect(self._send)
         btn_row.addWidget(btn_send)
         lay.addLayout(btn_row)
+
+        # Tab order and Enter-to-submit on single-line fields
+        self.setTabOrder(self._cmb_tipo, self._fld_name)
+        self.setTabOrder(self._fld_name, self._fld_email)
+        self.setTabOrder(self._fld_email, self._txt_msg)
+        for _f in (self._fld_name, self._fld_email):
+            _f.returnPressed.connect(self._send)
 
     def _send(self) -> None:
         if not self._txt_msg.toPlainText().strip():
@@ -303,7 +314,7 @@ class WelcomeWindow(QWidget):
         self._navigate_back = False       # set by case_closed signal → show dashboard on return
 
         self.setWindowTitle("PROSPECTIVE")
-        self.setMinimumSize(1024, 600)
+        self.setMinimumSize(800, 520)
         # WA_DeleteOnClose ensures that the C++ QObject is actually destroyed
         # when close() is called.  Without this flag, close() only hides the
         # widget and the destroyed() signal (connected to app.quit in app.py)
@@ -344,7 +355,7 @@ class WelcomeWindow(QWidget):
         # ── Greeting (left side) ────────────────────────────────────── #
         display = self._full_name.upper() if self._full_name else self._username.upper()
         greet = QLabel(f"BIENVENIDO,  {display}")
-        greet.setFont(QFont("Segoe UI", 13, QFont.Bold))
+        greet.setFont(QFont("Inter", 13, QFont.Bold))
         greet.setStyleSheet("color:#ffffff; background:transparent; border:none;")
         lay.addWidget(greet)
 
@@ -373,7 +384,7 @@ class WelcomeWindow(QWidget):
         btn.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         btn.setStyleSheet(
             f"QPushButton{{background:transparent;border:none;"
-            f"color:{color};font-size:12px;font-weight:bold;padding:0 13px;}}"
+            f"color:{color};font-size:13px;font-weight:600;padding:0 13px;}}"
             f"QPushButton:hover{{color:{_ACCENT};}}"
         )
         return btn
@@ -426,6 +437,7 @@ class WelcomeWindow(QWidget):
         # Resume button
         _btn = QPushButton("▶  Abrir sesión", banner)
         _btn.setFixedHeight(26)
+        _btn.setMinimumWidth(120)
         _btn.setStyleSheet(
             "QPushButton{background:#4E6678;border:none;border-radius:8px;"
             "color:#fff;font-weight:bold;font-size:11px;padding:0 14px;}"
@@ -440,7 +452,7 @@ class WelcomeWindow(QWidget):
         _x = QPushButton("✕", banner)
         _x.setFixedSize(22, 22)
         _x.setStyleSheet(
-            "QPushButton{background:transparent;border:none;color:#888;font-size:12px;}"
+            "QPushButton{background:transparent;border:none;color:#888;font-size:13px;}"
             "QPushButton:hover{color:#fff;}"
         )
         _x.clicked.connect(self._dismiss_recent_banner)
@@ -753,7 +765,7 @@ class WelcomeWindow(QWidget):
                     color: #d0d9ea;
                     padding: 4px 0;
                 }
-                QMenu::item          { padding: 8px 22px 8px 16px; font-size: 12px; }
+                QMenu::item          { padding: 8px 22px 8px 16px; font-size: 13px; }
                 QMenu::item:selected { background: #4E6678; color: #ffffff; border-radius: 14px; }
                 QMenu::item:disabled { color: #5a5a6a; }
                 QMenu::separator     { height: 1px; background: rgba(139,155,170,50);
@@ -768,7 +780,7 @@ class WelcomeWindow(QWidget):
                     color: #0D0D0D;
                     padding: 4px 0;
                 }
-                QMenu::item          { padding: 8px 22px 8px 16px; font-size: 12px; }
+                QMenu::item          { padding: 8px 22px 8px 16px; font-size: 13px; }
                 QMenu::item:selected { background: #DDE5EC; color: #0D0D0D; border-radius: 14px; }
                 QMenu::item:disabled { color: #9B9B9B; }
                 QMenu::separator     { height: 1px; background: #E5E5E5;

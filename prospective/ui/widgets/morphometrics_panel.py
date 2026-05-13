@@ -34,6 +34,14 @@ from prospective.ui.widgets.phases_panel import PHASESPanel
 logger = logging.getLogger(__name__)
 
 
+def _is_dark() -> bool:
+    try:
+        from prospective.ui.themes import is_dark
+        return is_dark()
+    except Exception:
+        return True
+
+
 # ──────────────────────────────────────────────────────────────────────────── #
 # Background worker                                                             #
 # ──────────────────────────────────────────────────────────────────────────── #
@@ -163,6 +171,10 @@ class MorphometricsPanel(QWidget):
         self._btn_analyze.setEnabled(False)
         self._btn_analyze.setMinimumHeight(30)
         self._btn_analyze.setObjectName("btn_success")
+        self._btn_analyze.setToolTip(
+            "Ejecuta el análisis morfométrico completo sobre la malla del aneurisma:\n"
+            "volumen, área, diámetros, cuello, esfericidad e índices de riesgo."
+        )
         self._btn_analyze.clicked.connect(self.analyze)
         outer.addWidget(self._btn_analyze)
 
@@ -271,13 +283,14 @@ class MorphometricsPanel(QWidget):
         vl.addWidget(sr_grp)
 
         # ── Risk legend ──────────────────────────────────────────────── #
+        _mc = "#9B9B9B" if _is_dark() else "#6B6B6B"
         legend = QLabel(
-            "<small style='color:#9B9B9B'>"
+            f"<small style='color:{_mc}'>"
             "DNR &gt;1.6 / AR &gt;1.3 → riesgo moderado<br>"
             "DNR &gt;2.0 / AR &gt;1.6 / UI &gt;0.25 → riesgo alto<br>"
             "BF &gt;1.5 → cuello ancho (considerar stent)<br>"
             "SR ≥ 2.0 → moderado · SR ≥ 3.0 → alto<br>"
-            "<i style='color:#9B9B9B'>Heurístico — no es diagnóstico clínico</i>"
+            f"<i style='color:{_mc}'>Heurístico — no es diagnóstico clínico</i>"
             "</small>"
         )
         legend.setWordWrap(True)
@@ -286,11 +299,7 @@ class MorphometricsPanel(QWidget):
         # ── PHASES score calculator ───────────────────────────────────── #
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
-        try:
-            from prospective.ui.themes import is_dark as _is_dark_morpho
-            _sep_clr = "#363636" if _is_dark_morpho() else "#D8D8D8"
-        except Exception:
-            _sep_clr = "#363636"
+        _sep_clr = "#363636" if _is_dark() else "#D8D8D8"
         sep.setStyleSheet(
             f"QFrame{{border:none;border-top:1px solid {_sep_clr};margin-top:4px;}}"
         )
@@ -307,6 +316,7 @@ class MorphometricsPanel(QWidget):
         # ── Export button ────────────────────────────────────────────── #
         self._btn_export = QPushButton("Exportar informe CSV")
         self._btn_export.setEnabled(False)
+        self._btn_export.setToolTip("Exporta todos los índices morfométricos y de riesgo a un archivo CSV")
         self._btn_export.clicked.connect(self._export_csv)
         outer.addWidget(self._btn_export)
 
@@ -431,7 +441,12 @@ class MorphometricsPanel(QWidget):
     # ------------------------------------------------------------------ #
 
     def _export_csv(self) -> None:
-        if self._result is None:
+        # Use live result if available; fall back to the snapshot restored from session
+        if self._result is not None:
+            rows = self._result.to_dict()
+        elif getattr(self, "_morpho_snapshot", None):
+            rows = self._morpho_snapshot
+        else:
             return
         path, _ = QFileDialog.getSaveFileName(
             self, "Exportar informe morfométrico", "morfometria_aneurisma.csv",
@@ -440,7 +455,6 @@ class MorphometricsPanel(QWidget):
         if not path:
             return
 
-        rows = self._result.to_dict()
         with open(path, "w", newline="", encoding="utf-8") as fh:
             writer = csv.writer(fh)
             writer.writerow(["Métrica", "Valor"])
@@ -450,4 +464,172 @@ class MorphometricsPanel(QWidget):
         QMessageBox.information(
             self, "Exportación completada",
             f"Informe guardado en:\n{path}",
+        )
+
+    # ------------------------------------------------------------------ #
+    # Session persistence                                                  #
+    # ------------------------------------------------------------------ #
+
+    def get_session_state(self) -> dict:
+        """Return PHASES inputs + parent artery diameter for session persistence.
+
+        The morphometric snapshot itself is collected separately in
+        MainWindow._collect_session() via self._morpho_panel._result.to_dict().
+        """
+        return {
+            "phases":      self._phases_panel.get_session_state(),
+            "parent_diam": self._spin_parent_diam.value(),
+        }
+
+    def restore_session_state(
+        self, morpho_dict: dict, clinical_state: dict | None = None
+    ) -> None:
+        """Repopulate labels from a saved morphometric snapshot.
+
+        Called by MainWindow._apply_session().  Labels are filled in even
+        though _result may be None (mesh not yet reloaded) so the user can
+        review previous results immediately.  Re-running the analysis will
+        overwrite these values with fresh live data.
+
+        Parameters
+        ----------
+        morpho_dict:
+            Dict returned by MorphometricResult.to_dict() (Spanish keys).
+        clinical_state:
+            Dict with keys ``phases`` (PHASES widget state) and
+            ``parent_diam`` (parent artery diameter in mm).
+        """
+        if not morpho_dict:
+            return
+
+        # Store snapshot so _export_csv() can still work without a live result
+        self._morpho_snapshot = morpho_dict
+
+        def _f(key: str, fmt: str = ".2f", suffix: str = "") -> str:
+            v = morpho_dict.get(key)
+            if v is None:
+                return "—"
+            try:
+                return f"{float(v):{fmt}}{suffix}"
+            except (TypeError, ValueError):
+                return "—"
+
+        # ── Volumetric ───────────────────────────────────────────────── #
+        self._lbl_volume.setText(_f("Volumen (mm³)", ".1f", " mm³"))
+        self._lbl_area.setText(_f("Área superficie (mm²)", ".1f", " mm²"))
+        self._lbl_eq_diam.setText(_f("Diámetro esfera eq. (mm)", ".2f", " mm"))
+
+        # ── Geometry ─────────────────────────────────────────────────── #
+        self._lbl_max_diam.setText(_f("Diám. máximo (mm)", ".2f", " mm"))
+        self._lbl_neck_diam.setText(_f("Diám. cuello (mm)", ".2f", " mm"))
+        self._lbl_dome_h.setText(_f("Altura domo (mm)", ".2f", " mm"))
+        # bbox axes not stored in snapshot → remain "—"
+
+        # ── Clinical ratios with colour coding ───────────────────────── #
+        try:
+            dnr = float(morpho_dict.get("Relación domo/cuello (DNR)", 0) or 0)
+            self._lbl_dnr.setText(f"{dnr:.3f}")
+            self._lbl_dnr.setStyleSheet(
+                "color:#f85149; font-weight:bold;" if dnr >= 2.0
+                else "color:#e3b341; font-weight:bold;" if dnr >= 1.6
+                else ""
+            )
+        except (TypeError, ValueError):
+            pass
+
+        try:
+            ar = float(morpho_dict.get("Aspect ratio (AR)", 0) or 0)
+            self._lbl_ar.setText(f"{ar:.3f}")
+            self._lbl_ar.setStyleSheet(
+                "color:#f85149; font-weight:bold;" if ar >= 1.6
+                else "color:#e3b341; font-weight:bold;" if ar >= 1.3
+                else ""
+            )
+        except (TypeError, ValueError):
+            pass
+
+        try:
+            compact = float(morpho_dict.get("Esfericidad (Wadell)", 0) or 0)
+            self._lbl_compact.setText(f"{compact:.4f}")
+        except (TypeError, ValueError):
+            pass
+
+        risk = str(morpho_dict.get("Riesgo ruptura (heurístico)", "—") or "—")
+        self._lbl_risk.setText(risk)
+        self._lbl_risk.setStyleSheet(_RISK_STYLE.get(risk, ""))
+
+        # ── Shape-complexity indices ──────────────────────────────────── #
+        try:
+            bf = float(morpho_dict.get("Bottleneck Factor (BF)", 0) or 0)
+            self._lbl_bf.setText(f"{bf:.3f}")
+            self._lbl_bf.setStyleSheet(
+                "color:#f85149; font-weight:bold;" if bf >= 2.0
+                else "color:#e3b341; font-weight:bold;" if bf >= 1.5
+                else ""
+            )
+        except (TypeError, ValueError):
+            pass
+
+        try:
+            ui = float(morpho_dict.get("Undulation Index (UI)", 0) or 0)
+            self._lbl_ui.setText(f"{ui:.4f}")
+            self._lbl_ui.setStyleSheet(
+                "color:#f85149; font-weight:bold;" if ui >= 0.25
+                else "color:#e3b341; font-weight:bold;" if ui >= 0.10
+                else ""
+            )
+        except (TypeError, ValueError):
+            pass
+
+        try:
+            ei = float(morpho_dict.get("Ellipticity Index (EI)", 0) or 0)
+            self._lbl_ei.setText(f"{ei:.4f}")
+            self._lbl_ei.setStyleSheet("")
+        except (TypeError, ValueError):
+            pass
+
+        try:
+            nsi = float(morpho_dict.get("Non-Sphericity Index (NSI)", 0) or 0)
+            self._lbl_nsi.setText(f"{nsi:.4f}")
+            self._lbl_nsi.setStyleSheet("")
+        except (TypeError, ValueError):
+            pass
+
+        # ── Size Ratio ───────────────────────────────────────────────── #
+        try:
+            sr = float(morpho_dict.get("Size Ratio (SR)", 0) or 0)
+            if sr > 0:
+                self._lbl_sr.setText(f"{sr:.3f}")
+                self._lbl_sr.setStyleSheet(
+                    "color:#f85149; font-weight:bold;" if sr >= 3.0
+                    else "color:#e3b341; font-weight:bold;" if sr >= 2.0
+                    else ""
+                )
+        except (TypeError, ValueError):
+            pass
+
+        # ── PHASES panel: diameter + saved inputs ─────────────────────── #
+        try:
+            max_diam = float(morpho_dict.get("Diám. máximo (mm)", 0) or 0)
+            if max_diam > 0:
+                self._phases_panel.set_max_diameter(max_diam)
+        except (TypeError, ValueError):
+            pass
+
+        if clinical_state:
+            phases_state = clinical_state.get("phases", {})
+            if phases_state:
+                self._phases_panel.restore_session_state(phases_state)
+            try:
+                parent_diam = float(clinical_state.get("parent_diam", 0.0) or 0.0)
+                self._spin_parent_diam.setValue(parent_diam)
+            except (TypeError, ValueError):
+                pass
+
+        # Enable export + update status
+        self._btn_export.setEnabled(True)
+        self._btn_analyze.setEnabled(self._pending_mesh is not None)
+        self._lbl_status.setText(
+            "Métricas restauradas desde sesión guardada.\n"
+            "Pulse Analizar para recalcular con la malla actual."
         )

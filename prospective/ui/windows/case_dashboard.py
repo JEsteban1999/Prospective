@@ -182,7 +182,7 @@ class _CaseCard(GlassCard):
     session_delete_requested = pyqtSignal(int, str, str)  # session_id, file_path, label
 
     # card geometry — width is fixed; height grows with session count
-    CARD_W = 280
+    CARD_W = 252   # slightly narrower so 3+ cards fit on 860px screens
 
     def __init__(self, case: dict, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent, radius=14, highlight=True)
@@ -240,7 +240,7 @@ class _CaseCard(GlassCard):
 
         # ── Patient name ──────────────────────────────────────────────── #
         name_lbl = QLabel(_truncate(c.get("patient_name") or "—", 32))
-        name_lbl.setFont(QFont("Segoe UI", 11, QFont.Bold))
+        name_lbl.setFont(QFont("Inter",11, QFont.Bold))
         name_lbl.setStyleSheet(f"color:{pal['txt']}; background:transparent;")
         root.addWidget(name_lbl)
 
@@ -297,7 +297,7 @@ class _CaseCard(GlassCard):
         edit_btn.setToolTip("Editar datos del caso")
         edit_btn.setStyleSheet(
             f"QPushButton{{background:transparent; border:none;"
-            f" color:{pal['muted']}; font-size:12px; padding:0; min-height:0;}}"
+            f" color:{pal['muted']}; font-size:13px; padding:0; min-height:0;}}"
             f"QPushButton:hover{{color:{pal['accent']};}}"
         )
         edit_btn.clicked.connect(
@@ -403,8 +403,8 @@ class _CaseCard(GlassCard):
             row_lay.addWidget(name_lbl, 1)
 
             open_btn = QPushButton("Abrir →")
-            open_btn.setFixedHeight(22)
-            open_btn.setFixedWidth(56)
+            open_btn.setFixedHeight(24)
+            open_btn.setFixedWidth(68)
             open_btn.setEnabled(has_file)
             open_btn.setToolTip(
                 ps.file_path if has_file
@@ -505,9 +505,6 @@ class CaseDashboard(QMainWindow):
     #: Emitted when the user opens an existing planning session from a card.
     open_session = pyqtSignal(str)        # .prospective file path
 
-    # number of card columns
-    _COLS = 4
-
     def __init__(
         self,
         username: str = "",
@@ -515,9 +512,10 @@ class CaseDashboard(QMainWindow):
     ) -> None:
         super().__init__(parent)
         self._username = username
+        self._first_show = True       # showMaximized on first appearance
 
         self.setWindowTitle("PROSPECTIVE — Panel de casos")
-        self.setMinimumSize(1024, 700)
+        self.setMinimumSize(780, 540)
 
         self._build_ui()
         self._load_cases()
@@ -529,12 +527,27 @@ class CaseDashboard(QMainWindow):
 
     def showEvent(self, event) -> None:    # noqa: N802
         super().showEvent(event)
+        # Maximise on first show so the card grid has plenty of room.
+        if self._first_show:
+            self._first_show = False
+            self.showMaximized()
         # Apply Windows DWM Acrylic blur to the dashboard window on first show.
         # enable_acrylic is a no-op on non-Windows platforms.
         try:
             enable_acrylic(self)
         except Exception:
             pass
+
+    def resizeEvent(self, event) -> None:    # noqa: N802
+        """Rebuild card grid when window width changes enough to alter column count."""
+        super().resizeEvent(event)
+        # Only rebuild when the effective column count has changed to avoid
+        # unnecessary redraws on every pixel of resize.
+        avail_w = max(self.width() - 96, _CaseCard.CARD_W * 2)
+        new_cols = max(2, min(4, avail_w // (_CaseCard.CARD_W + 16)))
+        if new_cols != getattr(self, "_current_cols", None):
+            self._current_cols = new_cols
+            self._load_cases()
 
     # ------------------------------------------------------------------ #
     # UI construction                                                      #
@@ -573,7 +586,7 @@ class CaseDashboard(QMainWindow):
         hl.addSpacing(6)
 
         logo_lbl = QLabel("PROSPECTIVE™")
-        logo_lbl.setFont(QFont("Segoe UI", 16, QFont.Bold))
+        logo_lbl.setFont(QFont("Inter",16, QFont.Bold))
         logo_lbl.setStyleSheet(f"color:{pal['accent']}; background:transparent;")
         hl.addWidget(logo_lbl)
 
@@ -663,7 +676,7 @@ class CaseDashboard(QMainWindow):
         hdr_lay.setSpacing(8)
 
         sec_title = QLabel("Casos Recientes")
-        sec_title.setFont(QFont("Segoe UI", 15, QFont.Bold))
+        sec_title.setFont(QFont("Inter",15, QFont.Bold))
         sec_title.setStyleSheet(f"color:{pal['txt']}; background:transparent;")
         hdr_lay.addWidget(sec_title)
 
@@ -698,7 +711,8 @@ class CaseDashboard(QMainWindow):
     def _make_empty_state(self) -> QWidget:
         pal = _pal()
         w = QWidget()
-        w.setFixedHeight(320)
+        w.setMinimumHeight(240)
+        w.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         lay = QVBoxLayout(w)
         lay.setAlignment(Qt.AlignCenter)
         lay.setSpacing(16)
@@ -721,7 +735,8 @@ class CaseDashboard(QMainWindow):
         lay.addWidget(msg_lbl)
 
         btn = QPushButton("＋  Crear primer caso")
-        btn.setFixedWidth(230)
+        btn.setMinimumWidth(180)
+        btn.setMaximumWidth(260)
         btn.setFixedHeight(40)
         if _is_dark():
             btn.setStyleSheet(
@@ -750,7 +765,11 @@ class CaseDashboard(QMainWindow):
         grid.setContentsMargins(0, 0, 0, 0)
         grid.setAlignment(Qt.AlignTop | Qt.AlignLeft)
 
-        cols = self._COLS
+        # Dynamic column count: fit as many CARD_W-wide cards as the current
+        # viewport allows, with a minimum of 2 and a maximum of 4.
+        avail_w = max(self.width() - 96, _CaseCard.CARD_W * 2)
+        cols = max(2, min(4, avail_w // (_CaseCard.CARD_W + 16)))
+
         for i, case in enumerate(cases):
             card = _CaseCard(case)
             card.clicked.connect(self._on_card_clicked)

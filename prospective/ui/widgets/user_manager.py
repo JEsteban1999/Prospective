@@ -106,7 +106,16 @@ class _UserFormDialog(QDialog):
         btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         btns.accepted.connect(self._validate_and_accept)
         btns.rejected.connect(self.reject)
+        btns.button(QDialogButtonBox.Ok).setDefault(True)
         layout.addWidget(btns)
+
+        # Tab order and Enter-to-submit for text fields
+        self.setTabOrder(self._username, self._full_name)
+        self.setTabOrder(self._full_name, self._role_cb)
+        self.setTabOrder(self._role_cb, self._pw1)
+        self.setTabOrder(self._pw1, self._pw2)
+        for _f in (self._username, self._full_name, self._pw1, self._pw2):
+            _f.returnPressed.connect(self._validate_and_accept)
 
     def _populate(self, u: User) -> None:
         self._username.setText(u.username)
@@ -548,6 +557,7 @@ class UserManagerDialog(QDialog):
         err_lbl = QLabel(""); err_lbl.setStyleSheet("color:#f87171;")
         lay.addWidget(err_lbl)
         btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns.button(QDialogButtonBox.Ok).setDefault(True)
         lay.addWidget(btns)
 
         def _accept():
@@ -562,4 +572,6 @@ class UserManagerDialog(QDialog):
 
         btns.accepted.connect(_accept)
         btns.rejected.connect(dlg.reject)
+        pw1.returnPressed.connect(_accept)
+        pw2.returnPressed.connect(_accept)
         dlg.exec()

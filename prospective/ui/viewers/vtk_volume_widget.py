@@ -230,7 +230,8 @@ class VTKVolumeWidget(QWidget):
 
         b1.addWidget(QLabel("Modo:"))
         self._mode_combo = QComboBox()
-        self._mode_combo.setMaximumWidth(105)
+        self._mode_combo.setMinimumWidth(100)
+        self._mode_combo.setMaximumWidth(150)
         self._mode_combo.setSizePolicy(_exp_pref)
         for name in _BLEND_MODES:
             self._mode_combo.addItem(name)
@@ -239,7 +240,8 @@ class VTKVolumeWidget(QWidget):
 
         b1.addWidget(QLabel("TF:"))
         self._preset_combo = QComboBox()
-        self._preset_combo.setMaximumWidth(90)
+        self._preset_combo.setMinimumWidth(80)
+        self._preset_combo.setMaximumWidth(120)
         self._preset_combo.setSizePolicy(_exp_pref)
         for name in PRESETS_3D:
             self._preset_combo.addItem(name)
@@ -254,7 +256,7 @@ class VTKVolumeWidget(QWidget):
 
         self._btn_bone_sub = QPushButton("⊖ Hueso")
         self._btn_bone_sub.setCheckable(True)
-        self._btn_bone_sub.setMaximumWidth(72)
+        self._btn_bone_sub.setMaximumWidth(90)
         self._btn_bone_sub.setSizePolicy(_exp_pref)
         self._btn_bone_sub.setToolTip(
             "Sustracción de hueso (HU > 300 → -1000).\n"
@@ -292,7 +294,7 @@ class VTKVolumeWidget(QWidget):
         self._hu_min_spin.setRange(-1000, 2000)
         self._hu_min_spin.setValue(_DEFAULT_HU_MIN)
         self._hu_min_spin.setSuffix(" H")
-        self._hu_min_spin.setFixedWidth(52)
+        self._hu_min_spin.setMinimumWidth(78)
         self._hu_min_spin.valueChanged.connect(self._on_hu_min_spin)
         b2.addWidget(self._hu_min_spin)
 
@@ -310,7 +312,7 @@ class VTKVolumeWidget(QWidget):
         self._hu_max_spin.setRange(-1000, 3000)
         self._hu_max_spin.setValue(_DEFAULT_HU_MAX)
         self._hu_max_spin.setSuffix(" H")
-        self._hu_max_spin.setFixedWidth(52)
+        self._hu_max_spin.setMinimumWidth(78)
         self._hu_max_spin.valueChanged.connect(self._on_hu_max_spin)
         b2.addWidget(self._hu_max_spin)
 
@@ -323,7 +325,7 @@ class VTKVolumeWidget(QWidget):
             ("Crán",  200, 3000),
         ):
             btn = QPushButton(label)
-            btn.setFixedWidth(38)
+            btn.setFixedWidth(48)
             btn.setToolTip(f"Rango HU: {lo} – {hi}")
             btn.clicked.connect(lambda _, a=lo, b=hi: self._set_hu_range_buttons(a, b))
             b2.addWidget(btn)

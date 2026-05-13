@@ -22,7 +22,7 @@ import logging
 from pathlib import Path
 
 import vtk
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, QEvent, pyqtSignal
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -312,6 +312,7 @@ class ClipPanel(QWidget):
 
         self._chk_filter = QCheckBox("Filtrar por diámetro de cuello")
         self._chk_filter.setChecked(True)
+        self._chk_filter.setToolTip("Muestra solo clips compatibles con el diámetro de cuello medido")
         self._chk_filter.toggled.connect(self._refresh_clip_list)
         sf.addWidget(self._chk_filter)
 
@@ -340,6 +341,7 @@ class ClipPanel(QWidget):
                 "border-radius:8px;color:#6B6B6B;font-size:10px;padding:3px 6px;}"
                 "QPushButton:hover{background:#DDE5EC;color:#0D0D0D;}"
             )
+        self._btn_import.setToolTip("Carga un modelo 3D personalizado (STL u OBJ) como clip quirúrgico")
         self._btn_import.clicked.connect(self._import_custom)
         sf.addWidget(self._btn_import)
 
@@ -381,6 +383,7 @@ class ClipPanel(QWidget):
                 "border-radius:9px;color:#2E4A5F;font-weight:bold;}"
                 "QPushButton:hover{background:#8B9BAA;color:#ffffff;}"
             )
+        self._btn_place.setToolTip("Coloca el clip seleccionado en las coordenadas indicadas")
         self._btn_place.clicked.connect(self._place_clip)
         layout.addWidget(self._btn_place)
 
@@ -393,6 +396,7 @@ class ClipPanel(QWidget):
         self._placed_list.setAlternatingRowColors(True)
         self._placed_list.setMaximumHeight(90)
         self._placed_list.currentRowChanged.connect(self._on_placed_selected)
+        self._placed_list.installEventFilter(self)
         pl.addWidget(self._placed_list)
 
         btn_row = QWidget()
@@ -402,11 +406,13 @@ class ClipPanel(QWidget):
 
         self._btn_toggle = QPushButton("Mostrar/Ocultar")
         self._btn_toggle.setEnabled(False)
+        self._btn_toggle.setToolTip("Muestra u oculta el clip seleccionado en la vista 3D")
         self._btn_toggle.clicked.connect(self._toggle_selected)
         br.addWidget(self._btn_toggle)
 
         self._btn_remove = QPushButton("Eliminar")
         self._btn_remove.setEnabled(False)
+        self._btn_remove.setToolTip("Elimina el clip seleccionado de la escena  [Supr]")
         self._btn_remove.setStyleSheet(
             "QPushButton{color:#f85149;}"
             "QPushButton:hover{background:rgba(248,81,73,15);border-color:#f85149;}"
@@ -421,6 +427,7 @@ class ClipPanel(QWidget):
         # ── Export ────────────────────────────────────────────────────── #
         self._btn_export = QPushButton("Exportar plan CSV")
         self._btn_export.setEnabled(False)
+        self._btn_export.setToolTip("Exporta el plan quirúrgico con las posiciones de todos los clips a CSV")
         self._btn_export.clicked.connect(self._export_plan)
         layout.addWidget(self._btn_export)
 
@@ -456,6 +463,7 @@ class ClipPanel(QWidget):
 
         self._btn_show_traj = QPushButton("Mostrar corredor")
         self._btn_show_traj.setCheckable(True)
+        self._btn_show_traj.setToolTip("Muestra el corredor de abordaje quirúrgico en la vista 3D")
         self._btn_show_traj.clicked.connect(self._toggle_trajectory)
         tbr.addWidget(self._btn_show_traj)
 
@@ -482,6 +490,7 @@ class ClipPanel(QWidget):
 
         self._btn_check_col = QPushButton("Verificar colisiones")
         self._btn_check_col.setEnabled(False)
+        self._btn_check_col.setToolTip("Verifica si algún clip colocado intersecta con el tejido vascular")
         self._btn_check_col.clicked.connect(self._check_all_collisions)
         cf.addWidget(self._btn_check_col)
 
@@ -519,6 +528,18 @@ class ClipPanel(QWidget):
                 "border-radius:9px;color:#2E4A5F;font-weight:bold;}"
                 "QPushButton:hover{background:#8B9BAA;color:#ffffff;}"
             )
+
+    # ------------------------------------------------------------------ #
+    # Event filter (keyboard Delete on placed list)                        #
+    # ------------------------------------------------------------------ #
+
+    def eventFilter(self, obj: object, event: object) -> bool:
+        """Delete key on _placed_list removes the selected clip."""
+        if obj is self._placed_list and event.type() == QEvent.KeyPress:
+            if event.key() == Qt.Key_Delete:
+                self._remove_selected()
+                return True
+        return super().eventFilter(obj, event)
 
     # ------------------------------------------------------------------ #
     # Catalogue / custom list                                              #

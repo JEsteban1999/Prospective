@@ -100,13 +100,13 @@ def _tinted_pixmap(path: str, size: int, color: str) -> QPixmap:
 # ── QSS reutilizables ─────────────────────────────────────────────────────── #
 _INPUT_QSS = (
     f"QLineEdit{{background:{_INPUT_BG};border:1px solid {_INPUT_BD};"
-    f"border-radius:11px;color:{_FG};padding:6px 12px;font-size:12px;"
+    f"border-radius:11px;color:{_FG};padding:6px 12px;font-size:13px;"
     f"min-height:38px; selection-background-color:{_BTN_VIO};}}"
     f"QLineEdit:focus{{border:1px solid {_INPUT_FO}; background:rgba(10,18,30,210);}}"
 )
 _COMBO_QSS = (
     f"QComboBox{{background:{_INPUT_BG};border:1px solid {_INPUT_BD};"
-    f"border-radius:11px;color:{_FG};padding:6px 28px 6px 12px;font-size:12px;"
+    f"border-radius:11px;color:{_FG};padding:6px 28px 6px 12px;font-size:13px;"
     f"min-height:38px;}}"
     f"QComboBox:focus{{border:1px solid {_INPUT_FO};}}"
     f"QComboBox::drop-down{{border:none;width:22px;"
@@ -122,7 +122,7 @@ _GRP_QSS = (
     "letter-spacing:0.8px;}"
     "QGroupBox::title{subcontrol-origin:margin;subcontrol-position:top left;"
     "padding:2px 8px;left:10px;}"
-    f"QLabel{{color:{_FG};background:transparent;font-size:12px;}}"
+    f"QLabel{{color:{_FG};background:transparent;font-size:13px;}}"
 )
 _SCROLL_QSS = (
     "QScrollArea{background:transparent;border:none;}"
@@ -260,7 +260,7 @@ class SignUpDialog(QDialog):
         lay.setSpacing(0)
 
         title = QLabel("PROSPECTIVE")
-        title.setFont(QFont("Segoe UI", 18, QFont.Bold))
+        title.setFont(QFont("Inter",18, QFont.Bold))
         title.setStyleSheet("color:#ffffff; background:transparent;")
         lay.addWidget(title)
         lay.addStretch()
@@ -323,7 +323,7 @@ class SignUpDialog(QDialog):
         title_col = QVBoxLayout()
         title_col.setSpacing(3)
         lbl_title = QLabel("Crear cuenta profesional")
-        lbl_title.setFont(QFont("Segoe UI", 15, QFont.Bold))
+        lbl_title.setFont(QFont("Inter",15, QFont.Bold))
         lbl_title.setStyleSheet("color:#ffffff; background:transparent;")
         lbl_sub = QLabel("Regístrate para acceder a PROSPECTIVE")
         lbl_sub.setStyleSheet(
@@ -565,7 +565,7 @@ class SignUpDialog(QDialog):
         btn.setStyleSheet(
             f"QPushButton{{background:{_INPUT_BG};border:1px solid {_INPUT_BD};"
             f"border-radius:11px;color:{_FG_MUTED};padding:0px 12px;"
-            f"text-align:left;font-size:12px;min-height:38px;}}"
+            f"text-align:left;font-size:13px;min-height:38px;}}"
             f"QPushButton:hover{{background:rgba(30,42,52,180);"
             f"color:{_FG};border-color:{_INPUT_FO};}}"
         )

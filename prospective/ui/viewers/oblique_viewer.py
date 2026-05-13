@@ -82,9 +82,13 @@ class ObliqueMPRDialog(QDialog):
         vl.setContentsMargins(6, 6, 6, 6)
         vl.setSpacing(6)
 
+        # Title: smoke-gray in dark (6.1:1 on #1F1F1F), teal-blue in light (4.9:1 on #F4F7FA)
+        # Subtitle: muted gray, #9B9B9B dark / #6B6B6B light
+        _ttl_c = "#A8B8C6" if _is_dark() else "#4E6678"
+        _sub_c = "#9B9B9B" if _is_dark() else "#6B6B6B"
         hdr = QLabel(
-            "<b style='color:#A8B8C6'>MPR Oblicuo</b>"
-            "<small style='color:#9B9B9B'>  —  define el plano de corte con los "
+            f"<b style='color:{_ttl_c}'>MPR Oblicuo</b>"
+            f"<small style='color:{_sub_c}'>  —  define el plano de corte con los "
             "deslizadores de rotación</small>"
         )
         vl.addWidget(hdr)

@@ -366,8 +366,15 @@ class TriplanarDialog(QDialog):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Vista Triplanar  —  Axial · Sagital · Coronal")
-        self.setMinimumSize(860, 380)
-        self.resize(1180, 500)
+        self.setMinimumSize(720, 340)
+        from PyQt5.QtWidgets import QApplication as _QApp
+        _scr = _QApp.primaryScreen()
+        if _scr is not None:
+            _av = _scr.availableGeometry()
+            # Triplanar needs width: clamp to 95% to stay on-screen on 1366px displays
+            self.resize(min(1180, int(_av.width() * 0.92)), min(500, int(_av.height() * 0.70)))
+        else:
+            self.resize(1100, 500)
         self.setModal(False)
 
         self._spacing: tuple[float, float, float] = (1.0, 1.0, 1.0)

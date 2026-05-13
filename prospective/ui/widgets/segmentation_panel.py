@@ -61,6 +61,215 @@ def _is_dark() -> bool:
 # Debounce delay before firing the fast preview (ms)
 _PREVIEW_DEBOUNCE_MS = 400
 
+
+# ──────────────────────────────────────────────────────────────────────────── #
+# Public utility — XA threshold computation (panel-independent, testable)      #
+# ──────────────────────────────────────────────────────────────────────────── #
+
+def compute_auto_thresholds(
+    volume: "np.ndarray | None",
+    modality: str,
+    window_center: float,
+    window_width: float,
+) -> tuple[float, float, str]:
+    """Universal threshold computation for **any** DICOM modality.
+
+    Dispatches to modality-specific sub-routines and returns a unified
+    ``(lower, upper, strategy)`` tuple so callers can display a hint to
+    the user without knowing the internal logic.
+
+    Parameters
+    ----------
+    volume:        Float32 NumPy array (z, y, x) already in HU / calibrated
+                   units, or *None* if not yet loaded.
+    modality:      DICOM Modality tag value (e.g. "CT", "XA", "MR", …).
+    window_center, window_width: From the DICOM series header.
+
+    Returns
+    -------
+    (lower, upper, strategy)
+        lower / upper — threshold values to apply.
+        strategy      — one of: ``"dsa"`` | ``"xa_band_pass"`` |
+                        ``"xa_wc_ww"`` | ``"ct_stats"`` | ``"ct_wc_ww"`` |
+                        ``"mr_percentile"`` | ``"wc_ww"``
+    """
+    mod = (modality or "").upper()
+    _XA = {"XA", "RF", "DX", "CR", "DR"}
+
+    if mod in _XA:
+        lower, upper, is_dsa = compute_xa_thresholds(volume, window_center, window_width)
+        return lower, upper, "dsa" if is_dsa else (
+            "xa_band_pass" if (window_width > 2000 and volume is not None) else "xa_wc_ww"
+        )
+
+    if mod == "CT":
+        return _ct_auto_thresholds(volume, window_center, window_width)
+
+    if mod == "MR":
+        return _mr_auto_thresholds(volume, window_center, window_width)
+
+    # Unknown / fallback: use percentile if volume available, else WC/WW
+    if volume is not None:
+        flat  = volume.ravel().astype("float32")
+        lower = float(np.percentile(flat, 90))
+        upper = float(np.percentile(flat, 99))
+        return lower, upper, "wc_ww"
+    lower = max(-200.0, window_center - window_width * 0.35)
+    upper = window_center + window_width * 0.45
+    return lower, upper, "wc_ww"
+
+
+def _ct_auto_thresholds(
+    volume: "np.ndarray | None",
+    wc: float,
+    ww: float,
+) -> tuple[float, float, str]:
+    """CT / CTA threshold using DICOM WC as the primary guide.
+
+    The DICOM WindowCenter set by the scanner/radiologist is calibrated for
+    the target tissue:
+      • CTA brain:  WC ≈ 150–300 HU → vessels + bone above ~100 HU
+      • Brain CT:   WC ≈  35– 50 HU → soft tissue window
+      • Bone CT:    WC ≈ 400–700 HU → dense bone window
+
+    We use the formula  lower = max(WC − WW × 0.10, 80)  which, for a typical
+    CTA (WC=170, WW=600), gives lower ≈ 110 HU — capturing contrast-enhanced
+    vessels (150–500 HU) while excluding soft tissue (0–80 HU).
+
+    When the volume is available we additionally validate the choice: if
+    fewer than 2 % of voxels are above 150 HU (no contrast enhancement), we
+    relax the threshold to the 80th percentile of non-air voxels instead.
+    """
+    if volume is not None:
+        flat = volume.ravel().astype("float32")
+        # Fraction of voxels above 150 HU (contrast vessels + bone in CTA)
+        frac_bright = float(np.mean(flat > 150))
+
+        if frac_bright >= 0.02:
+            # CTA-like: use WC-based formula.
+            # Minimum is 150 HU — the threshold between brain parenchyma (~35 HU)
+            # and contrast-enhanced vessels (≥ 150 HU).  80 HU was too low and
+            # captured parenchyma + bone marrow in addition to vessels.
+            lower = float(np.clip(wc - ww * 0.10, 150.0, 500.0))
+            return lower, 1500.0, "ct_stats"
+        else:
+            # Non-contrast / low-contrast CT: use 80th percentile of tissue
+            tissue = flat[flat > -100]
+            if len(tissue) > 0:
+                lower = float(np.clip(np.percentile(tissue, 80), 20.0, 150.0))
+                return lower, 1500.0, "ct_stats"
+
+    # Fallback: pure WC/WW derivation (same 150 HU floor)
+    lower = float(max(wc - ww * 0.10, 150.0))
+    return lower, 1500.0, "ct_wc_ww"
+
+
+def _mr_auto_thresholds(
+    volume: "np.ndarray | None",
+    wc: float,
+    ww: float,
+) -> tuple[float, float, str]:
+    """MR threshold using p90 of non-background voxels.
+
+    MR pixel values are not standardised (no HU equivalent), so we rely
+    entirely on the volume histogram: vessels appear in the upper-bright
+    fraction of the reconstructed image.
+    """
+    if volume is not None:
+        flat    = volume.ravel().astype("float32")
+        vmin    = float(flat.min())
+        # Exclude the near-background 'air' voxels (lowest 10 % of range)
+        cutoff  = vmin + (float(flat.max()) - vmin) * 0.10
+        tissue  = flat[flat > cutoff]
+        if len(tissue) > 0:
+            lower = float(np.percentile(tissue, 90))
+            upper = float(np.percentile(tissue, 99))
+            return lower, upper, "mr_percentile"
+
+    lower = max(-200.0, wc - ww * 0.35)
+    upper = wc + ww * 0.45
+    return lower, upper, "wc_ww"
+
+
+def compute_xa_thresholds(
+    volume: "np.ndarray | None",
+    window_center: float,
+    window_width: float,
+) -> tuple[float, float, bool]:
+    """Compute lower/upper HU thresholds for XA/3DRA segmentation.
+
+    Three dataset types are handled automatically:
+
+    1. **DSA subtraction** (e.g. 3DANGIO + SUB reconstruction):
+       Background tissue is digitally subtracted (≈ -1024 HU); contrast-filled
+       vessels survive at very high values (up to ~16 000 HU).
+       Signature: 99 % of voxels are dark (p99 < 0) but max >> 0.
+       → lower = p99.9, upper = 95 % of max.
+
+    2. **Standard cone-beam 3DRA** (no subtraction, wide WW > 2 000):
+       All structures visible; vessels are the bright minority.
+       → lower = p90, upper = p99 (classic band-pass).
+
+    3. **Narrow-window cone-beam** (calibrated WC/WW ≤ 2 000):
+       Header already encodes the vessel window.
+       → lower = WC − 0.35·WW, upper = WC + 0.45·WW.
+
+    Parameters
+    ----------
+    volume:
+        Float32 NumPy volume (z, y, x) already in HU or equivalent.
+        May be *None* if not yet loaded (falls back to WC/WW).
+    window_center, window_width:
+        DICOM WindowCenter / WindowWidth from the series header.
+
+    Returns
+    -------
+    (lower, upper, is_dsa)
+        lower / upper — threshold values to apply.
+        is_dsa        — True when DSA subtraction was detected.
+    """
+    if volume is not None:
+        flat = volume.ravel().astype("float32")
+        p90  = float(np.percentile(flat, 90))
+        p99  = float(np.percentile(flat, 99))
+        vmax = float(flat.max())
+
+        # ── Branch 1: DSA subtraction ──────────────────────────────────
+        # Signature: 99 % of voxels dark (p99 < 0) but bright vessel pixels
+        # exist (max > 500 HU).  Background is subtracted tissue ≈ -1024 HU;
+        # vessels survive as very bright voxels.
+        if p99 < 0 and vmax > 500:
+            p999  = float(np.percentile(flat, 99.9))
+            lower = max(p999, 50.0)
+            upper = vmax * 0.95
+            return lower, upper, True
+
+        # ── Branch 2: Raw 16-bit 3DRA (no RescaleSlope/Intercept) ──────
+        # Signature: p90 > 5 000 and max > 50 000.  The scanner does not
+        # apply a HU rescale (e.g. Siemens 3DRA_PROP exports raw counts).
+        # Background fills values ~18 000–22 000; vessels appear in the
+        # very bright tail (top 1 % of the range).
+        # p90-p99 band-pass (Branch 3) would capture background here, so
+        # we instead use p99 as the lower threshold, capturing only the
+        # true vessel-intensity voxels (top 1 %).
+        if p90 > 5_000 and vmax > 50_000:
+            lower = p99                                  # top ~1 % = vessel range
+            upper = float(np.percentile(flat, 99.9))    # avoid saturation artefacts
+            return lower, upper, False
+
+        # ── Branch 3: Standard 3DRA, wide WW (> 2 000) ─────────────────
+        # No subtraction; vessels are the bright minority of the HU range.
+        # Classic p90–p99 band-pass isolates the vessel-intensity fraction.
+        if window_width > 2000:
+            lower = p90
+            upper = p99
+            return lower, upper, False
+
+    # ── Branch 4: Narrow WW or no volume — use calibrated WC/WW ───────
+    lower = max(-200.0, window_center - window_width * 0.35)
+    upper = window_center + window_width * 0.45
+    return lower, upper, False
+
 # ──────────────────────────────────────────────────────────────────────────── #
 # Mapping tables                                                                #
 # ──────────────────────────────────────────────────────────────────────────── #
@@ -391,12 +600,12 @@ class SegmentationPanel(QWidget):
         window_center: float = 40.0,
         window_width: float = 400.0,
     ) -> None:
-        """
-        Configure segmentation defaults based on DICOM modality.
+        """Configure segmentation defaults for **any** DICOM modality.
 
-        For XA / RF / DX (X-ray based modalities) the pipeline activates
-        the band-pass filter automatically: voxels above the upper threshold
-        (typically the skull/calvaria) are excluded from the mesh.
+        Calls :func:`compute_auto_thresholds` which handles CT, XA (including
+        DSA subtraction), MR, and unknown modalities automatically.  The
+        strategy string returned by that function drives which hint message
+        is shown and which additional UI controls are adjusted.
 
         Parameters
         ----------
@@ -407,89 +616,116 @@ class SegmentationPanel(QWidget):
         self._modality = modality.upper()
         _XA_MODALITIES = {"XA", "RF", "DX", "CR", "DR"}
 
+        # ── Universal threshold computation ───────────────────────────────── #
+        lower, upper, strategy = compute_auto_thresholds(
+            self._volume, self._modality, window_center, window_width
+        )
+        logger.info(
+            "set_modality [%s]: lower=%.0f  upper=%.0f  strategy=%s",
+            modality, lower, upper, strategy,
+        )
+
+        # ── Apply lower threshold (all modalities) ────────────────────────── #
+        for w in (self._thr_slider, self._thr_spin):
+            w.blockSignals(True)
+        self._thr_slider.setValue(int(lower))
+        self._thr_spin.setValue(int(lower))
+        for w in (self._thr_slider, self._thr_spin):
+            w.blockSignals(False)
+
+        # ── Modality-specific UI adjustments ──────────────────────────────── #
         if self._modality in _XA_MODALITIES:
-            # --- Derive band-pass thresholds -----------------------------------
-            # XA DICOM headers often carry a display window (WC/WW) that spans
-            # the ENTIRE data range (e.g. WW=7578 → useless for segmentation).
-            # When WW > 2000 we fall back to actual volume statistics: contrast-
-            # filled vessels are in the upper-bright minority, dense bone/skull is
-            # the very top sliver.  Percentiles on the real data are far more
-            # robust than the header metadata.
-            if self._volume is not None and window_width > 2000:
-                # --- Percentile-based band-pass for wide-window 3DRA data -------
-                # In contrast-enhanced 3DRA (rotational angiography), contrast
-                # vessels are the BRIGHTEST structures.  We use a BAND-PASS:
-                #   lower = p90  — bottom of the brightest 10 % (vessels + bone)
-                #   upper = p99  — top cut-off to exclude saturated/artifact pixels
-                #                  (typically scanner bed, collimator edges, etc.)
-                # The 9-percentile-wide band captures vessel contrast while
-                # discarding the very-bright saturated artefacts that generate
-                # large noisy fragments in the mesh.
-                flat = self._volume.ravel().astype("float32")
-                lower = float(np.percentile(flat, 90))
-                upper = float(np.percentile(flat, 99))
-                logger.info(
-                    "XA band-pass from volume percentiles: "
-                    "lower=%.0f (p90)  upper=%.0f (p99)  (WW=%.0f too wide)",
-                    lower, upper, window_width,
-                )
-            else:
-                # Narrower-window data (e.g. cone-beam CT with calibrated WC/WW)
-                lower = max(-200.0, window_center - window_width * 0.35)
-                upper = window_center + window_width * 0.45
-                logger.info(
-                    "XA band-pass from WC/WW: lower=%.0f  upper=%.0f",
-                    lower, upper,
-                )
-
-            # Block signals to avoid triggering two preview runs
-            for w in (self._thr_slider, self._thr_spin, self._thr_max_spin):
-                w.blockSignals(True)
-            self._thr_slider.setValue(int(lower))
-            self._thr_spin.setValue(int(lower))
+            # XA — enable band-pass, grow seeds, aggressive cleanup
+            self._thr_max_spin.blockSignals(True)
             self._thr_max_spin.setValue(int(upper))
-            for w in (self._thr_slider, self._thr_spin, self._thr_max_spin):
-                w.blockSignals(False)
-
-            # Always enable the band-pass filter for XA (upper > lower guaranteed)
+            self._thr_max_spin.blockSignals(False)
             self._chk_thr_max.blockSignals(True)
             self._chk_thr_max.setChecked(True)
             self._thr_max_spin.setEnabled(True)
             self._chk_thr_max.blockSignals(False)
 
-            # Pre-fill grow-from-seeds HU range (tight around the vessel band)
-            seed_hi = int(upper)
-            self._spin_grow_lo.blockSignals(True)
-            self._spin_grow_hi.blockSignals(True)
+            for w in (self._spin_grow_lo, self._spin_grow_hi):
+                w.blockSignals(True)
             self._spin_grow_lo.setValue(int(lower))
-            self._spin_grow_hi.setValue(seed_hi)
-            self._spin_grow_lo.blockSignals(False)
-            self._spin_grow_hi.blockSignals(False)
+            self._spin_grow_hi.setValue(int(upper))
+            for w in (self._spin_grow_lo, self._spin_grow_hi):
+                w.blockSignals(False)
 
-            # Auto-set Limpieza = 7 and Suavizado = 6 for XA data:
-            # XA meshes are inherently noisier than CT — more aggressive
-            # fragment removal and smoothing produce a usable result.
-            # We block signals to avoid double-firing _schedule_preview.
+            # XA meshes are noisier — use more aggressive fragment removal
+            # and smoothing as a starting point.
             for w in (self._lim_slider, self._suav_slider):
                 w.blockSignals(True)
             self._lim_slider.setValue(7)
             self._suav_slider.setValue(6)
             for w in (self._lim_slider, self._suav_slider):
                 w.blockSignals(False)
-            self._on_limpieza_changed(7)   # sync advanced spinboxes + bar label
-            self._on_suavizado_changed(6)  # (these methods block their own signals)
+            self._on_limpieza_changed(7)
+            self._on_suavizado_changed(6)
 
+            # Hint text + style (amber warning)
+            _XA_STYLE = (
+                "color:#e3b341; font-size:10px; padding:4px 6px;"
+                "background:rgba(60,45,0,60); border-radius:6px;"
+            )
+            if strategy == "dsa":
+                hint = (
+                    "⚠ Modalidad XA (DSA) — sustracción digital detectada.\n"
+                    "Los vasos están en el 0.1 % superior de intensidad.\n"
+                    f"Umbral inferior auto-ajustado a p99.9 = {int(lower)} HU."
+                )
+            else:
+                hint = (
+                    "⚠ Modalidad XA — umbral banda-paso auto-configurado.\n"
+                    f"Rango: {int(lower)}–{int(upper)} HU  "
+                    "(Limpieza y Suavizado aumentados)."
+                )
+            self._lbl_xa_hint.setStyleSheet(_XA_STYLE)
+            self._lbl_xa_hint.setText(hint)
             self._lbl_xa_hint.setVisible(True)
-            # Auto-expand the Advanced section so users can see the XA indicator
-            # and the Umbral máx. control without having to open it manually
+            # Auto-expand Advanced section
             self._adv_widget.setVisible(True)
             self._btn_adv.setText("▼ Avanzado")
-            logger.info(
-                "XA modality — band-pass: lower=%.0f  upper=%.0f  "
-                "Limpieza=7  Suavizado=6",
-                lower, upper,
+
+        elif self._modality == "CT":
+            # CT — band-pass disabled; show brief info hint in blue
+            _CT_STYLE = (
+                "color:#58a6ff; font-size:10px; padding:4px 6px;"
+                "background:rgba(0,30,60,60); border-radius:6px;"
             )
+            if strategy == "ct_stats":
+                hint = (
+                    "ℹ CTA — umbral auto-ajustado por estadísticas del volumen.\n"
+                    f"Umbral inicial: {int(lower)} HU  "
+                    "(ajusta si incluye demasiado tejido)."
+                )
+            else:
+                hint = (
+                    "ℹ CT — umbral inicial derivado de WC/WW del header DICOM.\n"
+                    f"Umbral inicial: {int(lower)} HU."
+                )
+            self._lbl_xa_hint.setStyleSheet(_CT_STYLE)
+            self._lbl_xa_hint.setText(hint)
+            self._lbl_xa_hint.setVisible(True)
+
+        elif self._modality == "MR":
+            # MR — show percentile-based info hint
+            _MR_STYLE = (
+                "color:#bc8cff; font-size:10px; padding:4px 6px;"
+                "background:rgba(30,0,60,60); border-radius:6px;"
+            )
+            hint = (
+                "ℹ Resonancia Magnética — umbral por percentil p90 del tejido.\n"
+                f"Umbral inicial: {int(lower)} HU equivalente."
+            )
+            self._thr_max_spin.blockSignals(True)
+            self._thr_max_spin.setValue(int(upper))
+            self._thr_max_spin.blockSignals(False)
+            self._lbl_xa_hint.setStyleSheet(_MR_STYLE)
+            self._lbl_xa_hint.setText(hint)
+            self._lbl_xa_hint.setVisible(True)
+
         else:
+            # Unknown modality
             self._lbl_xa_hint.setVisible(False)
 
     def add_grow_seed(self, z: int, y: int, x: int) -> None:
@@ -556,7 +792,7 @@ class SegmentationPanel(QWidget):
         self._thr_spin.setRange(-200, 10000)
         self._thr_spin.setValue(200)
         self._thr_spin.setSuffix(" HU")
-        self._thr_spin.setFixedWidth(80)
+        self._thr_spin.setFixedWidth(100)
         thr_lay.addWidget(self._thr_spin)
 
         # Bidirectional sync + preview
@@ -590,9 +826,10 @@ class SegmentationPanel(QWidget):
         )
         lim_lay.addWidget(self._lim_slider, stretch=1)
 
+        _bar_clr = "#A8B8C6" if _is_dark() else "#4E6678"
         self._lim_bar_lbl = QLabel()
         self._lim_bar_lbl.setStyleSheet(
-            "color:#A8B8C6; font-family:monospace; font-size:11px;"
+            f"color:{_bar_clr}; font-family:monospace; font-size:11px;"
         )
         self._lim_bar_lbl.setFixedWidth(130)
         lim_lay.addWidget(self._lim_bar_lbl)
@@ -617,9 +854,10 @@ class SegmentationPanel(QWidget):
         )
         suav_lay.addWidget(self._suav_slider, stretch=1)
 
+        _bar_clr2 = "#A8B8C6" if _is_dark() else "#4E6678"
         self._suav_bar_lbl = QLabel()
         self._suav_bar_lbl.setStyleSheet(
-            "color:#A8B8C6; font-family:monospace; font-size:11px;"
+            f"color:{_bar_clr2}; font-family:monospace; font-size:11px;"
         )
         self._suav_bar_lbl.setFixedWidth(130)
         suav_lay.addWidget(self._suav_bar_lbl)
@@ -675,7 +913,7 @@ class SegmentationPanel(QWidget):
         self._thr_max_spin.setRange(0, 30000)
         self._thr_max_spin.setValue(600)
         self._thr_max_spin.setSuffix(" HU")
-        self._thr_max_spin.setFixedWidth(90)
+        self._thr_max_spin.setFixedWidth(100)
         self._thr_max_spin.setEnabled(False)
         thr_max_lay.addWidget(self._thr_max_spin, stretch=1)
 
@@ -685,10 +923,7 @@ class SegmentationPanel(QWidget):
         adv_form.addRow("Umbral máx.:", thr_max_row)
 
         # XA indicator — shown when modality auto-configured
-        self._lbl_xa_hint = QLabel(
-            "⚠ Modalidad XA — umbral banda-paso p90–p99 auto-configurado.\n"
-            "Limpieza y Suavizado aumentados para reducir ruido de fondo."
-        )
+        self._lbl_xa_hint = QLabel("")   # text set dynamically in set_modality()
         self._lbl_xa_hint.setStyleSheet(
             "color:#e3b341; font-size:10px; padding:4px 6px;"
             "background:rgba(60,45,0,60); border-radius:6px;"
@@ -753,7 +988,7 @@ class SegmentationPanel(QWidget):
         dec_lay.addWidget(self._adv_dec_slider, stretch=1)
 
         self._adv_dec_lbl = QLabel("70%")
-        self._adv_dec_lbl.setFixedWidth(34)
+        self._adv_dec_lbl.setFixedWidth(44)
         dec_lay.addWidget(self._adv_dec_lbl)
         adv_form.addRow("Decimación:", dec_row)
 
@@ -813,6 +1048,10 @@ class SegmentationPanel(QWidget):
         self._btn_seg.setEnabled(False)
         self._btn_seg.setMinimumHeight(32)
         self._btn_seg.setObjectName("btn_primary")
+        self._btn_seg.setToolTip(
+            "Ejecuta la segmentación completa con los parámetros actuales.\n"
+            "Genera la malla 3D y la representación volumétrica."
+        )
         self._btn_seg.clicked.connect(self._run_segmentation)
         layout.addWidget(self._btn_seg)
 
@@ -828,10 +1067,12 @@ class SegmentationPanel(QWidget):
         self._chk_mesh = QCheckBox("Malla 3D")
         self._chk_mesh.setChecked(True)
         self._chk_mesh.setEnabled(False)
+        self._chk_mesh.setToolTip("Muestra u oculta la malla de superficie 3D de la segmentación")
         self._chk_mesh.toggled.connect(self.mesh_visibility_changed)
         vf2.addWidget(self._chk_mesh)
         self._chk_vol = QCheckBox("Volumen")
         self._chk_vol.setChecked(True)
+        self._chk_vol.setToolTip("Muestra u oculta la representación volumétrica semitransparente")
         self._chk_vol.toggled.connect(self.volume_visibility_changed)
         vf2.addWidget(self._chk_vol)
         vis_grp.setLayout(vf2)
@@ -851,10 +1092,12 @@ class SegmentationPanel(QWidget):
         ef = QHBoxLayout()
         self._btn_stl = QPushButton("Exportar STL")
         self._btn_stl.setEnabled(False)
+        self._btn_stl.setToolTip("Exporta la malla segmentada en formato STL")
         self._btn_stl.clicked.connect(self.export_stl_requested)
         ef.addWidget(self._btn_stl)
         self._btn_obj = QPushButton("Exportar OBJ")
         self._btn_obj.setEnabled(False)
+        self._btn_obj.setToolTip("Exporta la malla segmentada en formato OBJ")
         self._btn_obj.clicked.connect(self.export_obj_requested)
         ef.addWidget(self._btn_obj)
         export_grp.setLayout(ef)
@@ -948,7 +1191,7 @@ class SegmentationPanel(QWidget):
         self._spin_seed_x.setRange(0, 9999)
         self._spin_seed_x.setPrefix("X:")
         for sp in (self._spin_seed_z, self._spin_seed_y, self._spin_seed_x):
-            sp.setFixedWidth(72)
+            sp.setFixedWidth(82)
             seed_lay.addWidget(sp)
         seed_frm.addRow("Semilla (voxel):", seed_xyz)
 

@@ -5,16 +5,18 @@ Two themes, both with Liquid Glass glassmorphism effects on dialogs/cards:
   dark  — Neutral dark per IDENTIDAD_VISUAL.md  bg #1F1F1F  (default)
   light — Clean light per IDENTIDAD_VISUAL.md   bg #FFFFFF
 
-Both themes share the same violet brand colour (#8B9BAA) and apply
+Both themes share the smoke-gray brand colour (#8B9BAA) and apply
 glassmorphism / acrylic effects through glass_utils.GlassCard and
 glass_utils.enable_acrylic().
 
 Token sources
 -------------
-  Sección 2 de IDENTIDAD_VISUAL.md — paleta DARK y LIGHT completas.
-  Sección 3 — tipografía: Inter → Segoe UI, 14 px base.
-  Sección 4 — radios: 6 px buttons/inputs, 8 px cards.
-  Sección 5 — componentes: botón, input, card, tabla, tooltip …
+  Design bundle 2026-05: colors_and_type.css + styles.css + extras.css
+  Primary: #8B9BAA (smoke gray, hue 210)
+  Typography: Inter (bundled) → Segoe UI Symbol → Segoe UI, 13 px base
+  Radii (iOS scale): 6 / 10 / 14 / 18 px
+  Paleta DARK y LIGHT per IDENTIDAD_VISUAL.md §2
+  Fonts loaded via QFontDatabase.addApplicationFont() in app.py
 
 Usage
 -----
@@ -43,8 +45,8 @@ from PyQt5.QtWidgets import QApplication
 
 _DARK = """
     * {
-        font-family: "Segoe UI Symbol", "Segoe UI", "Inter", "Helvetica Neue", "Arial Unicode MS", sans-serif;
-        font-size: 12px;
+        font-family: "Inter", "Segoe UI Symbol", "Segoe UI", "Helvetica Neue", "Arial Unicode MS", sans-serif;
+        font-size: 13px;
     }
     QMainWindow, QDialog, QWidget {
         background-color: #1F1F1F;
@@ -129,7 +131,7 @@ _DARK = """
         border-radius: 10px;
         padding: 5px 14px;
         color: #EBEBEB;
-        font-size: 12px;
+        font-size: 13px;
         font-weight: 500;
         min-height: 28px;
     }
@@ -165,7 +167,7 @@ _DARK = """
         color: #EBEBEB;
         selection-background-color: #8B9BAA;
         selection-color: #1C1C1C;
-        font-size: 12px;
+        font-size: 13px;
         min-height: 26px;
     }
     QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus {
@@ -292,7 +294,7 @@ _DARK = """
         border: none;
         border-radius: 6px;
         padding: 4px 8px;
-        font-size: 12px;
+        font-size: 13px;
         font-weight: 600;
     }
     QCalendarWidget QToolButton:hover { background-color: #363636; color: #A8B8C6; }
@@ -309,7 +311,7 @@ _DARK = """
         color: #EBEBEB;
         selection-background-color: #4E6678;
         selection-color: #ffffff;
-        font-size: 12px;
+        font-size: 13px;
     }
     QCalendarWidget QAbstractItemView:disabled {
         color: #555555;
@@ -325,12 +327,11 @@ _DARK = """
         background: transparent;
         border: none;
         border-bottom: 2px solid transparent;
-        padding: 9px 22px 7px;
+        padding: 7px 10px 5px;
         color: #565656;
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 500;
         margin-right: 2px;
-        min-width: 70px;
     }
     QTabBar::tab:selected { color: #C0CDD8; border-bottom: 2px solid #8B9BAA; font-weight: 600; }
     QTabBar::tab:hover:!selected { color: #EBEBEB; border-bottom: 2px solid #3a4e5e; }
@@ -338,7 +339,7 @@ _DARK = """
         background-color: #2A2A2A;
         border-top: 1px solid #363636;
         color: #9B9B9B;
-        font-size: 12px;
+        font-size: 13px;
         padding: 2px 8px;
     }
     QProgressBar {
@@ -373,7 +374,7 @@ _DARK = """
         border: 1px solid #363636;
         border-radius: 10px;
         padding: 6px 10px;
-        font-size: 12px;
+        font-size: 13px;
     }
     QTableWidget, QTableView {
         background-color: #2A2A2A;
@@ -443,7 +444,7 @@ _DARK = """
     }
     QPushButton#btn_danger:hover { background: #501525; color: #ff8f9a; }
     /* Role labels */
-    QLabel[role="muted"]   { color: #9B9B9B; font-size: 12px; }
+    QLabel[role="muted"]   { color: #9B9B9B; font-size: 13px; }
     QLabel[role="section"] { color: #9B9B9B; font-size: 11px; font-weight: 700; letter-spacing: 1px; }
     QLabel[role="help"] {
         color: #9B9B9B; font-size: 11px;
@@ -452,7 +453,7 @@ _DARK = """
     QWidget[role="adv_section"] { background: #252525; border: 1px solid #363636; border-radius: 6px; }
     QToolButton[role="adv_toggle"] {
         background: transparent; border: none;
-        color: #A8B8C6; font-size: 12px; text-align: left; padding: 2px 4px;
+        color: #A8B8C6; font-size: 13px; text-align: left; padding: 2px 4px;
     }
     QToolButton[role="adv_toggle"]:hover { color: #A8B8C6; }
     /* QPushButton:checked for toggle groups */
@@ -473,8 +474,8 @@ _DARK = """
 
 _LIGHT = """
     * {
-        font-family: "Segoe UI Symbol", "Segoe UI", "Inter", "Helvetica Neue", "Arial Unicode MS", sans-serif;
-        font-size: 12px;
+        font-family: "Inter", "Segoe UI Symbol", "Segoe UI", "Helvetica Neue", "Arial Unicode MS", sans-serif;
+        font-size: 13px;
     }
     QMainWindow, QDialog, QWidget {
         background-color: #F4F7FA;
@@ -559,7 +560,7 @@ _LIGHT = """
         border-radius: 10px;
         padding: 5px 14px;
         color: #0D0D0D;
-        font-size: 12px;
+        font-size: 13px;
         font-weight: 500;
         min-height: 28px;
     }
@@ -595,7 +596,7 @@ _LIGHT = """
         color: #0D0D0D;
         selection-background-color: #8B9BAA;
         selection-color: #1C1C1C;
-        font-size: 12px;
+        font-size: 13px;
         min-height: 26px;
     }
     QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus {
@@ -722,7 +723,7 @@ _LIGHT = """
         border: none;
         border-radius: 6px;
         padding: 4px 8px;
-        font-size: 12px;
+        font-size: 13px;
         font-weight: 600;
     }
     QCalendarWidget QToolButton:hover { background-color: #DDE5EC; color: #2E4A5F; }
@@ -739,7 +740,7 @@ _LIGHT = """
         color: #0D0D0D;
         selection-background-color: #8B9BAA;
         selection-color: #ffffff;
-        font-size: 12px;
+        font-size: 13px;
     }
     QCalendarWidget QAbstractItemView:disabled {
         color: #AAAAAA;
@@ -755,12 +756,11 @@ _LIGHT = """
         background: transparent;
         border: none;
         border-bottom: 2px solid transparent;
-        padding: 9px 22px 7px;
+        padding: 7px 10px 5px;
         color: #9BAAB8;
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 500;
         margin-right: 2px;
-        min-width: 70px;
     }
     QTabBar::tab:selected { color: #4E6678; border-bottom: 2px solid #8B9BAA; font-weight: 600; }
     QTabBar::tab:hover:!selected { color: #2E4A5F; border-bottom: 2px solid #C4D4E0; }
@@ -768,7 +768,7 @@ _LIGHT = """
         background-color: #FFFFFF;
         border-top: 1px solid #E8EDF2;
         color: #6B6B6B;
-        font-size: 12px;
+        font-size: 13px;
         padding: 2px 8px;
     }
     QProgressBar {
@@ -803,7 +803,7 @@ _LIGHT = """
         border: 1px solid #E5E5E5;
         border-radius: 10px;
         padding: 6px 10px;
-        font-size: 12px;
+        font-size: 13px;
     }
     QTableWidget, QTableView {
         background-color: #FFFFFF;
@@ -873,7 +873,7 @@ _LIGHT = """
     }
     QPushButton#btn_danger:hover { background: #FFE4E6; color: #A40E26; }
     /* Role labels */
-    QLabel[role="muted"]   { color: #6B6B6B; font-size: 12px; }
+    QLabel[role="muted"]   { color: #6B6B6B; font-size: 13px; }
     QLabel[role="section"] { color: #6B6B6B; font-size: 11px; font-weight: 700; letter-spacing: 1px; }
     QLabel[role="help"] {
         color: #6B6B6B; font-size: 11px;
@@ -883,7 +883,7 @@ _LIGHT = """
     QWidget[role="adv_section"] { background: #EBF1F7; border: 1px solid #DDE5ED; border-radius: 6px; }
     QToolButton[role="adv_toggle"] {
         background: transparent; border: none;
-        color: #4E6678; font-size: 12px; text-align: left; padding: 2px 4px;
+        color: #4E6678; font-size: 13px; text-align: left; padding: 2px 4px;
     }
     QToolButton[role="adv_toggle"]:hover { color: #2E4A5F; }
     /* QPushButton:checked for toggle groups */

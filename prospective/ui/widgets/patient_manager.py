@@ -101,7 +101,20 @@ class _PatientDialog(QDialog):
         btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         btns.accepted.connect(self.accept)
         btns.rejected.connect(self.reject)
+        btns.button(QDialogButtonBox.Ok).setDefault(True)
         layout.addWidget(btns)
+
+        # Tab order through form fields
+        self.setTabOrder(self._surname, self._given_name)
+        self.setTabOrder(self._given_name, self._hosp_id)
+        self.setTabOrder(self._hosp_id, self._dob)
+        self.setTabOrder(self._dob, self._sex)
+        self.setTabOrder(self._sex, self._institution)
+        self.setTabOrder(self._institution, self._notes)
+        # Enter key in single-line fields submits the dialog
+        for _f in (self._surname, self._given_name, self._hosp_id,
+                   self._dob, self._institution):
+            _f.returnPressed.connect(self.accept)
 
     def _populate(self, p: Patient) -> None:
         self._surname.setText(p.surname)
@@ -176,7 +189,18 @@ class _StudyDialog(QDialog):
         btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         btns.accepted.connect(self.accept)
         btns.rejected.connect(self.reject)
+        btns.button(QDialogButtonBox.Ok).setDefault(True)
         layout.addWidget(btns)
+
+        # Tab order through form fields
+        self.setTabOrder(self._study_date, self._modality)
+        self.setTabOrder(self._modality, self._description)
+        self.setTabOrder(self._description, self._accession)
+        self.setTabOrder(self._accession, self._notes)
+        # Enter key in single-line fields submits the dialog
+        for _f in (self._study_date, self._modality,
+                   self._description, self._accession):
+            _f.returnPressed.connect(self.accept)
 
     def _browse_dicom(self) -> None:
         path = QFileDialog.getExistingDirectory(self, "Seleccionar directorio DICOM")
@@ -245,7 +269,12 @@ class _LinkSessionDialog(QDialog):
         btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         btns.accepted.connect(self.accept)
         btns.rejected.connect(self.reject)
+        btns.button(QDialogButtonBox.Ok).setDefault(True)
         layout.addWidget(btns)
+
+        # Enter key in single-line fields submits the dialog
+        for _f in (self._label, self._neck_mm, self._n_clips):
+            _f.returnPressed.connect(self.accept)
 
     def get_data(self) -> dict:
         try:
@@ -296,8 +325,14 @@ class PatientManagerDialog(QDialog):
         self._selected_session_id_inline: int | None = None
 
         self.setWindowTitle("Gestión de Pacientes — PROSPECTIVE")
-        self.setMinimumSize(1100, 620)
-        self.resize(1200, 680)
+        self.setMinimumSize(820, 540)
+        from PyQt5.QtWidgets import QApplication as _QApp
+        _scr = _QApp.primaryScreen()
+        if _scr is not None:
+            _av = _scr.availableGeometry()
+            self.resize(min(1200, int(_av.width() * 0.90)), min(680, int(_av.height() * 0.88)))
+        else:
+            self.resize(1100, 660)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
         _apply_style(self)
 

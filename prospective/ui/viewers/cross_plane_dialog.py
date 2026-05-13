@@ -22,6 +22,8 @@ Los tres planos son instancias de ``vtkImagePlaneWidget`` que comparten el mismo
   • Girar la cámara con clic-arrastre izquierdo (trackball).
   • Mover cada plano con su slider inferior.
   • Aplicar zoom con la rueda del ratón.
+  • Activar/desactivar cada plano individualmente con el botón ● / ○
+    situado a la izquierda de cada fila de slider (visualización en 1, 2 o 3 planos).
 
 API pública
 -----------
@@ -41,6 +43,7 @@ from PyQt5.QtWidgets import (
     QDialog,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QSizePolicy,
     QSlider,
     QVBoxLayout,
@@ -130,8 +133,14 @@ class CrossPlaneDialog(QDialog):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Visor DICOM 3D  —  SAG · COR · AX")
-        self.setMinimumSize(700, 560)
-        self.resize(900, 640)
+        self.setMinimumSize(620, 460)
+        from PyQt5.QtWidgets import QApplication as _QApp
+        _scr = _QApp.primaryScreen()
+        if _scr is not None:
+            _av = _scr.availableGeometry()
+            self.resize(min(900, int(_av.width() * 0.88)), min(640, int(_av.height() * 0.85)))
+        else:
+            self.resize(900, 640)
         self.setModal(False)
 
         # Estado interno
@@ -148,6 +157,14 @@ class CrossPlaneDialog(QDialog):
         self._plane_sag: vtk.vtkImagePlaneWidget | None = None
         self._plane_cor: vtk.vtkImagePlaneWidget | None = None
         self._plane_ax:  vtk.vtkImagePlaneWidget | None = None
+
+        # Visibilidad por plano y botones de toggle (poblados en _build_ui)
+        self._plane_vis: dict[str, bool]         = {
+            "sagital": True,
+            "coronal": True,
+            "axial":   True,
+        }
+        self._vis_btns: dict[str, QPushButton]   = {}
 
         self._build_vtk_pipeline()
         self._build_ui()
@@ -257,8 +274,9 @@ class CrossPlaneDialog(QDialog):
         hdr = QLabel("Visor DICOM 3D  —  SAG · COR · AX")
         hdr.setAlignment(Qt.AlignCenter)
         hdr.setFixedHeight(28)
+        _hdr_clr = "#8B9BAA" if _is_dark() else "#4E6678"
         hdr.setStyleSheet(
-            f"background:{_cpd_bg()}; color:#8B9BAA; font-weight:bold;"
+            f"background:{_cpd_bg()}; color:{_hdr_clr}; font-weight:bold;"
             "font-size:11px; letter-spacing:2px;"
         )
         self._cpd_hdr = hdr
@@ -286,6 +304,27 @@ class CrossPlaneDialog(QDialog):
             hl  = QHBoxLayout(row)
             hl.setContentsMargins(0, 0, 0, 0)
             hl.setSpacing(6)
+
+            # ── Botón de visibilidad ──────────────────────────────── #
+            vis_btn = QPushButton("●")
+            vis_btn.setCheckable(True)
+            vis_btn.setChecked(True)
+            vis_btn.setFixedSize(22, 22)
+            vis_btn.setToolTip(f"Mostrar / ocultar plano {cfg['label']}")
+            vis_btn.setStyleSheet(
+                f"QPushButton {{"
+                f"  color:{fg}; background:transparent; border:none;"
+                f"  font-size:13px; font-weight:bold; padding:0px;"
+                f"}}"
+                f"QPushButton:!checked {{"
+                f"  color:#555555;"
+                f"}}"
+            )
+            vis_btn.toggled.connect(
+                lambda chk, n=plane_name: self._toggle_plane(n, chk)
+            )
+            self._vis_btns[plane_name] = vis_btn
+            hl.addWidget(vis_btn)
 
             tag = QLabel(cfg["label"])
             tag.setFixedWidth(28)
@@ -336,11 +375,75 @@ class CrossPlaneDialog(QDialog):
     def apply_theme(self) -> None:
         """Re-style header and footer to match the current light/dark theme."""
         bg = _cpd_bg()
+        _hdr_clr = "#8B9BAA" if _is_dark() else "#4E6678"
         self._cpd_hdr.setStyleSheet(
-            f"background:{bg}; color:#8B9BAA; font-weight:bold;"
+            f"background:{bg}; color:{_hdr_clr}; font-weight:bold;"
             "font-size:11px; letter-spacing:2px;"
         )
         self._cpd_footer.setStyleSheet(f"background:{bg};")
+        for plane_name, btn in self._vis_btns.items():
+            fg = _PLANE_CFG[plane_name]["fg"]
+            btn.setStyleSheet(
+                f"QPushButton {{"
+                f"  color:{fg}; background:transparent; border:none;"
+                f"  font-size:13px; font-weight:bold; padding:0px;"
+                f"}}"
+                f"QPushButton:!checked {{"
+                f"  color:#555555;"
+                f"}}"
+            )
+
+    # ── Plane visibility toggle ──────────────────────────────────── #
+
+    def _toggle_plane(self, name: str, checked: bool) -> None:
+        """Show or hide one MPR plane and update sliders and header."""
+        self._plane_vis[name] = checked
+
+        # Update button symbol (● visible / ○ hidden)
+        btn = self._vis_btns.get(name)
+        if btn is not None:
+            btn.setText("●" if checked else "○")
+
+        # Show/hide the VTK plane widget
+        plane_map = {
+            "sagital": self._plane_sag,
+            "coronal": self._plane_cor,
+            "axial":   self._plane_ax,
+        }
+        plane = plane_map.get(name)
+        if plane is not None:
+            if checked:
+                plane.On()
+            else:
+                plane.Off()
+            if self._volume_loaded:
+                self._iren.GetRenderWindow().Render()
+
+        # Enable / disable the position slider
+        self._sliders[name].setEnabled(checked and self._volume_loaded)
+
+        # Dim the position label when the plane is hidden
+        fg = _PLANE_CFG[name]["fg"]
+        self._pos_lbls[name].setStyleSheet(
+            f"color:{'#555555' if not checked else fg};"
+            "font-size:10px; font-family:monospace;"
+        )
+        if not checked:
+            self._pos_lbls[name].setText("—")
+
+        self._update_header_text()
+
+    def _update_header_text(self) -> None:
+        """Rebuild window title and header label to list only the visible planes."""
+        visible = [
+            _PLANE_CFG[n]["label"]
+            for n in ("sagital", "coronal", "axial")
+            if self._plane_vis.get(n, True)
+        ]
+        parts = " · ".join(visible) if visible else "sin planos activos"
+        text  = f"Visor DICOM 3D  —  {parts}"
+        self._cpd_hdr.setText(text)
+        self.setWindowTitle(text)
 
     # ── Public API ───────────────────────────────────────────────── #
 
@@ -381,12 +484,20 @@ class CrossPlaneDialog(QDialog):
         self._plane_cor.SetSliceIndex(idx_y)
         self._plane_ax.SetSliceIndex(idx_z)
 
-        for plane in (self._plane_sag, self._plane_cor, self._plane_ax):
-            plane.On()
+        # Activar sólo los planos que el usuario marcó como visibles
+        for plane_name, plane in (
+            ("sagital", self._plane_sag),
+            ("coronal", self._plane_cor),
+            ("axial",   self._plane_ax),
+        ):
+            if self._plane_vis.get(plane_name, True):
+                plane.On()
+            else:
+                plane.Off()
 
-        # Configurar sliders
-        for sl in self._sliders.values():
-            sl.setEnabled(True)
+        # Configurar sliders (sólo habilitados si el plano es visible)
+        for plane_name, sl in self._sliders.items():
+            sl.setEnabled(self._plane_vis.get(plane_name, True))
 
         self._sliders["sagital"].blockSignals(True)
         self._sliders["sagital"].setMaximum(x - 1)

@@ -33,7 +33,7 @@ import sys
 from pathlib import Path
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIcon
+from PyQt5.QtGui import QFontDatabase, QIcon
 from PyQt5.QtWidgets import QApplication
 
 logger = logging.getLogger(__name__)
@@ -51,6 +51,32 @@ def _app_icon() -> QIcon:
     return QIcon()
 
 
+def _load_fonts() -> None:
+    """Register bundled Inter + JetBrains Mono fonts with Qt font database.
+
+    Files live in resources/fonts/.  Missing files are silently skipped so
+    the app still runs on machines where the folder wasn't deployed.
+    """
+    fonts_dir = _RES / "fonts"
+    font_files = [
+        "Inter-Regular.ttf",
+        "Inter-Medium.ttf",
+        "Inter-SemiBold.ttf",
+        "Inter-Bold.ttf",
+        "Inter-ExtraBold.ttf",
+        "JetBrainsMono-Regular.ttf",
+    ]
+    loaded = 0
+    for name in font_files:
+        path = fonts_dir / name
+        if path.exists():
+            fid = QFontDatabase.addApplicationFont(str(path))
+            if fid >= 0:
+                loaded += 1
+    if loaded:
+        logger.debug("Loaded %d bundled font(s) from resources/fonts/", loaded)
+
+
 def run() -> int:
     QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
     QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
@@ -58,6 +84,7 @@ def run() -> int:
     app = QApplication(sys.argv)
     app.setWindowIcon(_app_icon())          # ← título + taskbar en todos los QWidget
     app.setApplicationName("PROSPECTIVE")
+    _load_fonts()                           # ← register Inter + JetBrains Mono
     app.setOrganizationName("Fundación Universitaria Navarra UNINAVARRA")
     app.setApplicationVersion("0.1.0")
     # WelcomeWindow.destroyed → app.quit handles shutdown; disable the

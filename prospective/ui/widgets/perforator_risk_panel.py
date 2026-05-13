@@ -18,6 +18,7 @@ import vtk
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import (
+    QCheckBox,
     QDoubleSpinBox,
     QFormLayout,
     QGroupBox,
@@ -68,6 +69,7 @@ class PerforatorRiskPanel(QWidget):
 
     overlay_ready   = pyqtSignal(list)   # list[vtkActor]
     overlay_cleared = pyqtSignal()
+    render_requested = pyqtSignal()      # re-render after visibility toggle
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -76,6 +78,7 @@ class PerforatorRiskPanel(QWidget):
         self._aneurysm_poly: vtk.vtkPolyData | None  = None
         self._result:        PerforatorRiskResult | None = None
         self._actors:        list | None             = None
+        self._actors_named                           = None  # PerforatorRiskActors
 
         self._build_ui()
 
@@ -229,6 +232,48 @@ class PerforatorRiskPanel(QWidget):
         legend.setTextFormat(Qt.RichText)
         layout.addWidget(legend)
 
+        # ── Visibility controls ──────────────────────────────────────── #
+        self._vis_grp = QGroupBox("Visibilidad en 3D")
+        vis_lay = QVBoxLayout()
+        vis_lay.setContentsMargins(6, 4, 6, 6)
+        vis_lay.setSpacing(6)
+
+        # Master toggle button
+        self._btn_toggle_vis = QPushButton("👁  Ocultar perforantes")
+        self._btn_toggle_vis.setCheckable(True)
+        self._btn_toggle_vis.setObjectName("btn_muted")
+        self._btn_toggle_vis.toggled.connect(self._on_toggle_all_visibility)
+        vis_lay.addWidget(self._btn_toggle_vis)
+
+        # Per-risk-level checkboxes (plain QCheckBox; colored dot via prefix text)
+        chk_row = QWidget()
+        chk_lay = QHBoxLayout(chk_row)
+        chk_lay.setContentsMargins(0, 0, 0, 0)
+        chk_lay.setSpacing(14)
+
+        self._chk_high = QCheckBox("🔴 Alto")
+        self._chk_med  = QCheckBox("🟡 Medio")
+        self._chk_low  = QCheckBox("🟢 Bajo")
+
+        for chk, lvl in (
+            (self._chk_high, 1),
+            (self._chk_med,  2),
+            (self._chk_low,  3),
+        ):
+            chk.setChecked(True)
+            chk.setStyleSheet("font-size:11px;")
+            chk.toggled.connect(
+                lambda checked, _lvl=lvl: self._on_risk_level_toggled(_lvl, checked)
+            )
+            chk_lay.addWidget(chk)
+
+        chk_lay.addStretch()
+        vis_lay.addWidget(chk_row)
+
+        self._vis_grp.setLayout(vis_lay)
+        self._vis_grp.setVisible(False)   # shown only after first detection
+        layout.addWidget(self._vis_grp)
+
         # ── Disclaimer ───────────────────────────────────────────────── #
         disc = QLabel(
             "⚠ Detección automática experimental basada en análisis "
@@ -309,6 +354,7 @@ class PerforatorRiskPanel(QWidget):
 
         try:
             actors_named = build_risk_actors(result)
+            self._actors_named = actors_named
             self._actors = list(actors_named)
         except Exception as exc:
             logger.exception("Failed to build perforator actors")
@@ -316,6 +362,18 @@ class PerforatorRiskPanel(QWidget):
                 f"<span style='color:#f85149'>Error al construir actores: {exc}</span>"
             )
             self._actors = []
+            self._actors_named = None
+
+        # Reset visibility controls to "all visible"
+        self._btn_toggle_vis.blockSignals(True)
+        self._btn_toggle_vis.setChecked(False)
+        self._btn_toggle_vis.setText("👁  Ocultar perforantes")
+        self._btn_toggle_vis.blockSignals(False)
+        for chk in (self._chk_high, self._chk_med, self._chk_low):
+            chk.blockSignals(True)
+            chk.setChecked(True)
+            chk.blockSignals(False)
+        self._vis_grp.setVisible(True)
 
         self._btn_clear.setEnabled(True)
         self.overlay_ready.emit(self._actors or [])
@@ -323,11 +381,34 @@ class PerforatorRiskPanel(QWidget):
     def _on_clear(self) -> None:
         self._result = None
         self._actors = None
+        self._actors_named = None
         self._table.setRowCount(0)
         self._lbl_result.setText("—")
         self._lbl_result.setStyleSheet("")
         self._btn_clear.setEnabled(False)
+        self._vis_grp.setVisible(False)
         self.overlay_cleared.emit()
+
+    def _on_toggle_all_visibility(self, hidden: bool) -> None:
+        """Master toggle — hide or restore ALL perforator actors."""
+        if self._actors_named is None:
+            return
+        visible = not hidden
+        self._actors_named.set_visible(visible)
+        self._btn_toggle_vis.setText(
+            "👁  Mostrar perforantes" if hidden else "👁  Ocultar perforantes"
+        )
+        # Disable per-level checkboxes while globally hidden
+        for chk in (self._chk_high, self._chk_med, self._chk_low):
+            chk.setEnabled(visible)
+        self.render_requested.emit()
+
+    def _on_risk_level_toggled(self, risk_level: int, checked: bool) -> None:
+        """Show or hide sphere+label actors for one risk level."""
+        if self._actors_named is None:
+            return
+        self._actors_named.set_risk_level_visible(risk_level, checked)
+        self.render_requested.emit()
 
     # ------------------------------------------------------------------ #
     # Helpers                                                              #
